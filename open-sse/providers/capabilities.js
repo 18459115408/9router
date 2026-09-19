@@ -214,6 +214,41 @@ export const PROVIDER_CAPABILITIES = {
     // contract). maxOutput 128000 per the server's product-config payload.
     "deepseek-v4.1-flash": { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
   },
+  // WorkBuddy international — authoritative per-model metadata from the
+  // gateway's own /v3/config (data.models[]), same field mapping as codebuddy-cn:
+  // contextWindow=maxInputTokens, maxOutput=maxOutputTokens, vision=
+  // supportsImages. Every model reasons via OpenAI-style reasoning_effort (see
+  // registry thinkingFormat). thinkingCanDisable maps to the server's
+  // reasoning.canDisableThinking — it is NOT the inverse of onlyReasoning.
+  // The *-model ids (default/fast/balanced/primary/deep) are server-side aliases
+  // that pick a concrete model per request; their published limits are the
+  // alias's own envelope, so they are listed as-is.
+  workbuddy: {
+    "default-model":        { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 176000, maxOutput: 24000 },
+    "fast-model":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 200000, maxOutput: 32000 },
+    "balanced-model":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 256000, maxOutput: 32000 },
+    "primary-model":        { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 272000, maxOutput: 72000 },
+    "deep-model":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 176000, maxOutput: 24000 },
+    "gpt-6-astra":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+    "gpt-5.6-sol":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+    "gpt-5.6-terra":        { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+    "gpt-5.6-luna":         { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+    "gpt-5.5":              { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+    "gpt-5.4":              { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 272000, maxOutput: 72000 },
+    // Publishes no reasoning block upstream: reasoning stays true (it answers
+    // reasoning_effort) but the level set falls through to the format default.
+    "gemini-3.5-flash":     { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
+    "glm-5.3":              { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 48000 },
+    "glm-5.2":              { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 48000 },
+    "kimi-k3":              { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 32000 },
+    "kimi-k2.8-preview":    { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 32000 },
+    "kimi-k2.6":            { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 256000, maxOutput: 32000 },
+    "hy4-preview":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 64000 },
+    "hy4-preview-f":        { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 64000 },
+    "hy3":                  { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 192000, maxOutput: 64000 },
+    "deepseek-v4.1-flash":  { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+    "deepseek-v4.1-flash-sg": { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+  },
   // Qoder — upstream exposes opaque internal ids (dfmodel, kmodel, …); the
   // registry `name` is display-only and capability lookup matches on the raw
   // id, so every qoder model would fall through to DEFAULT_CAPABILITIES

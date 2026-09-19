@@ -52,6 +52,22 @@ const PATTERN_THINKING = [
   { provider: "codebuddy-cn", pattern: "deepseek-v4*", levels: ["low", "high", "xhigh"] },
   { provider: "codebuddy-cn", pattern: "hy3*",         levels: ["low", "high"] },
   { provider: "codebuddy-cn", pattern: "hy4*",         levels: ["high"] },
+  // workbuddy per-model effort sets, taken from /v3/config's
+  // reasoning.supportedEfforts. As with codebuddy-cn the chat endpoint answers
+  // any level (probed none/off/minimal/low/medium/high/xhigh/max/bogus → all
+  // 200) and clamps out-of-range values silently, so the declared set stays
+  // authoritative for the picker. Models publishing no supportedEfforts
+  // (kimi-k3 / kimi-k2.6 / gemini-3.5-flash / deepseek-v4.1-flash[-sg]) fall
+  // through to the openai format default.
+  { provider: "workbuddy", pattern: "gpt-6-astra",   levels: ["low", "medium", "high", "xhigh", "max"] },
+  { provider: "workbuddy", pattern: "gpt-5.6-*",     levels: ["low", "medium", "high", "xhigh", "max"] },
+  { provider: "workbuddy", pattern: "gpt-5.5",       levels: ["low", "medium", "high", "xhigh"] },
+  { provider: "workbuddy", pattern: "gpt-5.4",       levels: ["low", "medium", "high", "xhigh"] },
+  { provider: "workbuddy", pattern: "glm-5.3",       levels: ["low", "high", "max"] },
+  { provider: "workbuddy", pattern: "glm-5.2",       levels: ["high", "xhigh"] },
+  { provider: "workbuddy", pattern: "kimi-k2.8*",    levels: ["low", "high", "max"] },
+  { provider: "workbuddy", pattern: "hy4*",          levels: ["high"] },
+  { provider: "workbuddy", pattern: "hy3",           levels: ["low", "high"] },
 ];
 
 // Returns valid thinking levels for a model, or null when the model has no reasoning.

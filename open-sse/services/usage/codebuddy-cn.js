@@ -22,6 +22,7 @@
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { PROVIDERS } from "../../providers/index.js";
 import { U, parseResetTime } from "./shared.js";
+import { deriveWorkBuddyDeviceHeaders } from "../../executors/workbuddy.js";
 
 const PROVIDER_ID = "codebuddy-cn";
 
@@ -43,17 +44,30 @@ function refillCadence(acc) {
   return "Monthly";
 }
 
-async function getCodeBuddyUsage(providerId, accessToken, apiKey, providerSpecificData, proxyOptions = null) {
+async function getCodeBuddyUsage(providerId, accessToken, apiKey, providerSpecificData, proxyOptions = null, connectionId = null) {
   const token = accessToken || apiKey;
   if (!token) {
     return { message: `CodeBuddy (${providerId}) credential not available.` };
   }
 
   try {
+    // WorkBuddy gets the same device/identity overlay as its chat path, so the
+    // billing call presents one consistent device per account. Gated on
+    // providerId so codebuddy-cn traffic is byte-identical to before.
+    const overlay = providerId === "workbuddy"
+      ? deriveWorkBuddyDeviceHeaders(providerSpecificData, connectionId)
+      : {};
+    const extraHeaders = {};
+    for (const [key, value] of Object.entries(overlay)) {
+      if (value === null) continue;
+      extraHeaders[key] = value;
+    }
+
     const response = await proxyAwareFetch(U(providerId).url, {
       method: "POST",
       headers: {
         ...(PROVIDERS[providerId]?.headers || {}),
+        ...extraHeaders,
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -143,4 +157,11 @@ export async function getCodeBuddyCnUsage(accessToken, apiKey, providerSpecificD
 
 export async function getCodeBuddyIntlUsage(accessToken, apiKey, providerSpecificData, proxyOptions = null) {
   return getCodeBuddyUsage("codebuddy-intl", accessToken, apiKey, providerSpecificData, proxyOptions);
+}
+
+// WorkBuddy shares the CodeBuddy billing envelope and pack taxonomy; only the
+// host differs (registry usage.url). connectionId feeds the device-header seed
+// when no uid is stored on the connection.
+export async function getWorkBuddyUsage(accessToken, apiKey, providerSpecificData, proxyOptions = null, connectionId = null) {
+  return getCodeBuddyUsage("workbuddy", accessToken, apiKey, providerSpecificData, proxyOptions, connectionId);
 }

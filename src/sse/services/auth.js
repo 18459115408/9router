@@ -1,6 +1,6 @@
 import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getProxyPools } from "@/lib/localDb";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/connectionProxy";
-import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
+import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, resolveCooldownMs } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache } from "./antigravityQuota.js";
@@ -16,6 +16,33 @@ function githubMonthlyResetMs(status, errorText, provider) {
   if (!String(errorText || "").toLowerCase().includes(GITHUB_MONTHLY_USAGE_LIMIT)) return null;
   const now = new Date();
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+}
+
+/**
+ * Resolve the per-provider cooldown override from settings.
+ *
+ * Lives at settings.providerStrategies[providerId].cooldown — the same block
+ * that already carries fallbackStrategy, so no new storage or API is needed.
+ * Returns {} when nothing is configured, which makes every downstream default
+ * fall back to the global constants (identical behaviour to before).
+ *
+ * Read failure is non-fatal: a broken settings row must not stop account
+ * failover, so we degrade to "no override".
+ *
+ * @param {string|null} provider - Provider id or alias
+ * @returns {Promise<object>} CooldownConfig (possibly empty)
+ */
+async function resolveCooldownConfig(provider) {
+  if (!provider) return {};
+  try {
+    const providerId = resolveProviderId(provider);
+    const settings = await getSettings();
+    const override = (settings.providerStrategies || {})[providerId] || {};
+    return override.cooldown || {};
+  } catch (err) {
+    log.warn("AUTH", `Could not resolve cooldown config for ${provider}: ${err?.message || err}`);
+    return {};
+  }
 }
 
 /**
@@ -245,6 +272,10 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   // GitHub premium-request exhaustion is account-wide until the next UTC month.
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
+  // Per-provider override (settings.providerStrategies[providerId].cooldown).
+  // Empty object when unconfigured → every branch below keeps its global default.
+  const cooldownCfg = await resolveCooldownConfig(provider);
+
   // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff
   let shouldFallback, cooldownMs, newBackoffLevel;
   if (githubResetAtMs) {
@@ -254,12 +285,17 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   } else if (resetsAtMs && resetsAtMs > Date.now()) {
     shouldFallback = true;
     // Antigravity quota API provides exact per-model resetAt. Do not truncate it.
+    // Otherwise cap at the configured limit (global default 30 min) — this branch
+    // is checked BEFORE the backoff path, so it is the cap that actually applies
+    // whenever upstream reports a reset time. resolveCooldownMs applies the same
+    // validation as the backoff path (negative/NaN → global default).
+    const rateLimitCap = resolveCooldownMs(cooldownCfg.maxRateLimitCooldownMs, MAX_RATE_LIMIT_COOLDOWN_MS);
     cooldownMs = resolveProviderId(provider) === "antigravity"
       ? resetsAtMs - Date.now()
-      : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
+      : Math.min(resetsAtMs - Date.now(), rateLimitCap);
     newBackoffLevel = 0;
   } else {
-    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel));
+    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, cooldownCfg));
   }
   if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
 

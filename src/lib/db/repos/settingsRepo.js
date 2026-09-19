@@ -12,6 +12,12 @@ const DEFAULT_SETTINGS = {
   tailscaleEnabled: false,
   tailscaleUrl: "",
   stickyRoundRobinLimit: 3,
+  // Per-provider overrides, keyed by provider id. Recognised sub-keys:
+  //   fallbackStrategy / stickyRoundRobinLimit — account selection
+  //   cooldown — {maxBackoffMs, maxRateLimitCooldownMs, cooldownLongMs,
+  //               cooldownShortMs, transientCooldownMs, backoffBaseMs}
+  // Every cooldown field is optional; unset fields fall back to the global
+  // constants in open-sse/config/errorConfig.js. See DESIGN-provider-cooldown.md.
   providerStrategies: {},
   quotaVisibility: {},
   comboStrategy: "fallback",

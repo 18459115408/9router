@@ -1,15 +1,83 @@
-import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS } from "../config/errorConfig.js";
+import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, COOLDOWN } from "../config/errorConfig.js";
+
+/**
+ * Per-provider cooldown override.
+ *
+ * Every field is optional; an unset field falls back to the global constant, so
+ * omitting the object entirely reproduces the historical behaviour exactly.
+ * Callers pass whatever they resolved from settings; this module never reads
+ * settings itself (it stays pure and usable from tests).
+ *
+ * @typedef {Object} CooldownConfig
+ * @property {number} [maxBackoffMs]            cap for exponential 429 backoff
+ * @property {number} [maxBackoffLevel]         how far the exponential may climb
+ * @property {number} [maxRateLimitCooldownMs]  cap when upstream reports a reset time
+ * @property {number} [cooldownLongMs]          fixed cooldown for 401/402/403/404-class rules
+ * @property {number} [cooldownShortMs]         fixed cooldown for "request not allowed"
+ * @property {number} [transientCooldownMs]     cooldown for unmatched errors
+ * @property {number} [backoffBaseMs]           exponential backoff base
+ */
+
+// Tolerate null/undefined/non-object cfg so callers can pass through whatever
+// they resolved without a guard.
+function norm(cfg) {
+  return cfg && typeof cfg === "object" ? cfg : {};
+}
+
+// Pick the first finite, non-negative override; otherwise the default.
+function pick(override, fallback) {
+  return Number.isFinite(override) && override >= 0 ? override : fallback;
+}
+
+/**
+ * Resolve a single cooldown override against its global default.
+ * Exported so call sites outside this module (auth.js's resetsAt branch) apply
+ * the identical validation rule — negative/NaN/non-numeric → default.
+ * @param {number|undefined} override
+ * @param {number} fallback
+ * @returns {number}
+ */
+export function resolveCooldownMs(override, fallback) {
+  return pick(override, fallback);
+}
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
  * Level 1: 1s, Level 2: 2s, Level 3: 4s... → max 4 min
+ *
+ * NOTE: maxBackoffMs only bites if the exponential can actually reach it. With
+ * the default base (2s) and maxBackoffLevel (15) the ceiling is base * 2^14 ≈
+ * 9.1h, so a larger maxBackoffMs has no effect unless backoffBaseMs (or
+ * maxBackoffLevel) is raised too. Set backoffBaseMs to the target duration when
+ * a long first-strike cooldown is what you want.
+ *
  * @param {number} backoffLevel - Current backoff level
+ * @param {CooldownConfig} [cfg] - Per-provider override
  * @returns {number} Cooldown in milliseconds
  */
-export function getQuotaCooldown(backoffLevel = 0) {
+export function getQuotaCooldown(backoffLevel = 0, cfg = {}) {
+  const c = norm(cfg);
+  const base = pick(c.backoffBaseMs, BACKOFF_CONFIG.base);
+  const max = pick(c.maxBackoffMs, BACKOFF_CONFIG.max);
   const level = Math.max(0, backoffLevel - 1);
-  const cooldown = BACKOFF_CONFIG.base * Math.pow(2, level);
-  return Math.min(cooldown, BACKOFF_CONFIG.max);
+  const cooldown = base * Math.pow(2, level);
+  return Math.min(cooldown, max);
+}
+
+// Clamp a backoff level, honouring a configured ceiling.
+function nextBackoffLevel(backoffLevel, cfg) {
+  const maxLevel = pick(norm(cfg).maxBackoffLevel, BACKOFF_CONFIG.maxLevel);
+  return Math.min(backoffLevel + 1, maxLevel);
+}
+
+// Map a rule's fixed cooldown onto the override bucket it belongs to. Rules keep
+// their declared value; the override only substitutes for the two semantic
+// buckets (long/short), so an unrecognised value passes through untouched.
+function resolveFixedCooldown(ruleCooldownMs, cfg) {
+  const c = norm(cfg);
+  if (ruleCooldownMs === COOLDOWN.long) return pick(c.cooldownLongMs, COOLDOWN.long);
+  if (ruleCooldownMs === COOLDOWN.short) return pick(c.cooldownShortMs, COOLDOWN.short);
+  return ruleCooldownMs;
 }
 
 /**
@@ -18,9 +86,11 @@ export function getQuotaCooldown(backoffLevel = 0) {
  * @param {number} status - HTTP status code
  * @param {string} errorText - Error message text
  * @param {number} backoffLevel - Current backoff level for exponential backoff
+ * @param {CooldownConfig} [cfg] - Per-provider cooldown override
  * @returns {{ shouldFallback: boolean, cooldownMs: number, newBackoffLevel?: number }}
  */
-export function checkFallbackError(status, errorText, backoffLevel = 0) {
+export function checkFallbackError(status, errorText, backoffLevel = 0, cfg = {}) {
+  const c = norm(cfg);
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
@@ -29,24 +99,24 @@ export function checkFallbackError(status, errorText, backoffLevel = 0) {
     // Text-based rule: match substring in error message
     if (rule.text && lowerError && lowerError.includes(rule.text)) {
       if (rule.backoff) {
-        const newLevel = Math.min(backoffLevel + 1, BACKOFF_CONFIG.maxLevel);
-        return { shouldFallback: true, cooldownMs: getQuotaCooldown(newLevel), newBackoffLevel: newLevel };
+        const newLevel = nextBackoffLevel(backoffLevel, c);
+        return { shouldFallback: true, cooldownMs: getQuotaCooldown(newLevel, c), newBackoffLevel: newLevel };
       }
-      return { shouldFallback: true, cooldownMs: rule.cooldownMs };
+      return { shouldFallback: true, cooldownMs: resolveFixedCooldown(rule.cooldownMs, c) };
     }
 
     // Status-based rule: match HTTP status code
     if (rule.status && rule.status === status) {
       if (rule.backoff) {
-        const newLevel = Math.min(backoffLevel + 1, BACKOFF_CONFIG.maxLevel);
-        return { shouldFallback: true, cooldownMs: getQuotaCooldown(newLevel), newBackoffLevel: newLevel };
+        const newLevel = nextBackoffLevel(backoffLevel, c);
+        return { shouldFallback: true, cooldownMs: getQuotaCooldown(newLevel, c), newBackoffLevel: newLevel };
       }
-      return { shouldFallback: true, cooldownMs: rule.cooldownMs };
+      return { shouldFallback: true, cooldownMs: resolveFixedCooldown(rule.cooldownMs, c) };
     }
   }
 
   // Default: transient cooldown for any unmatched error
-  return { shouldFallback: true, cooldownMs: TRANSIENT_COOLDOWN_MS };
+  return { shouldFallback: true, cooldownMs: pick(c.transientCooldownMs, TRANSIENT_COOLDOWN_MS) };
 }
 
 /**
@@ -196,14 +266,15 @@ export function resetAccountState(account) {
  * Apply error state to account
  * @param {object} account - Account object
  * @param {number} status - HTTP status code
- * @param {string} errorText - Error message
+ * @param {string} errorText - Error message text
+ * @param {CooldownConfig} [cfg] - Per-provider cooldown override
  * @returns {object} Updated account with error state
  */
-export function applyErrorState(account, status, errorText) {
+export function applyErrorState(account, status, errorText, cfg = {}) {
   if (!account) return account;
 
   const backoffLevel = account.backoffLevel || 0;
-  const { cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel);
+  const { cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, cfg);
 
   return {
     ...account,

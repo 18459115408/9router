@@ -567,6 +567,23 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "workbuddy":
+        // WorkBuddy shares the CodeBuddy billing envelope and pack taxonomy
+        // (recurring refill packs + one-shot bonus packs), so `recurring` is
+        // forwarded the same way as codebuddy-cn.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              recurring: quota.recurring !== false,
+            });
+          });
+        }
+        break;
+
       case "grok-cli":
         // Grok Build credits (on-demand window + prepaid balance).
         // Do NOT forward absolute `remaining` — getRemainingPercentage treats
