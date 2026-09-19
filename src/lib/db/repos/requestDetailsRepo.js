@@ -107,6 +107,7 @@ async function flushToDatabase() {
             provider: item.provider || null,
             model: item.model || null,
             connectionId: item.connectionId || null,
+            connectionName: item.connectionName || undefined,
             timestamp: item.timestamp,
             status: item.status || null,
             latency: item.latency || {},
@@ -184,7 +185,29 @@ export async function getRequestDetails(filter = {}) {
     `SELECT data FROM requestDetails ${where} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset]
   );
-  const details = rows.map((r) => parseJson(r.data, {}));
+
+  // id → display name for enriching rows recorded before connectionName existed
+  let enrichConnMap = null;
+  if (rows.length) {
+    try {
+      const { getProviderConnections } = await import("./connectionsRepo.js");
+      enrichConnMap = {};
+      for (const c of await getProviderConnections()) {
+        enrichConnMap[c.id] = c.displayName || c.name || c.email || c.id;
+      }
+    } catch { enrichConnMap = null; }
+  }
+
+  const details = rows.map((r) => {
+    const d = parseJson(r.data, {});
+    // Older rows predate connectionName: resolve it from the live connection
+    // list the same way getRecentLogs does (falls back silently if unavailable).
+    if (!d.connectionName && d.connectionId) {
+      if (!enrichConnMap) return d;
+      d.connectionName = enrichConnMap[d.connectionId] || undefined;
+    }
+    return d;
+  });
 
   return {
     details,
