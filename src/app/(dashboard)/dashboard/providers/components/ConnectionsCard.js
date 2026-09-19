@@ -4,18 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import PropTypes from "prop-types";
 import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal } from "@/shared/components";
-
-// Cooldown override inputs. Values are entered in minutes (except
-// maxBackoffLevel, a count) and stored as ms — see saveCooldown.
-const COOLDOWN_FIELDS = [
-  { key: "cooldownLongMs", label: "Auth / quota error (min)", placeholder: "2", step: 1 },
-  { key: "maxBackoffMs", label: "Rate-limit backoff cap (min)", placeholder: "5", step: 1 },
-  { key: "maxRateLimitCooldownMs", label: "Upstream reset cap (min)", placeholder: "30", step: 1 },
-  { key: "cooldownShortMs", label: "Rejected request (min)", placeholder: "0.08", step: 0.5 },
-  { key: "transientCooldownMs", label: "Unknown error (min)", placeholder: "0.5", step: 0.5 },
-  { key: "backoffBaseMs", label: "Backoff base (min)", placeholder: "0.03", step: 0.5 },
-  { key: "maxBackoffLevel", label: "Max backoff level (count)", placeholder: "15", step: 1 },
-];
+import CooldownOverrideSection from "./CooldownOverrideSection";
 
 // ── CooldownTimer ──────────────────────────────────────────────
 function CooldownTimer({ until }) {
@@ -316,7 +305,6 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [providerStickyLimit, setProviderStickyLimit] = useState("1");
-  const [cooldownDraft, setCooldownDraft] = useState({});
   const [showCooldown, setShowCooldown] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
 
@@ -335,15 +323,6 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
-      // Cooldown values are stored in ms; the inputs show minutes.
-      const cd = override.cooldown || {};
-      const draft = {};
-      for (const [k, v] of Object.entries(cd)) {
-        if (typeof v === "number" && Number.isFinite(v)) {
-          draft[k] = k === "maxBackoffLevel" ? String(v) : String(v / 60000);
-        }
-      }
-      setCooldownDraft(draft);
     } catch (e) { console.log("ConnectionsCard fetch error:", e); }
     finally { setLoading(false); }
   }, [providerId]);
@@ -367,44 +346,6 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
       else updated[providerId] = override;
       await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerStrategies: updated }) });
     } catch (e) { console.log("saveStrategy error:", e); }
-  };
-
-  // Cooldown overrides are edited in minutes; maxBackoffLevel is a plain count.
-  // An empty/invalid input clears that key so the global constant applies again.
-  const saveCooldown = async (key, rawValue) => {
-    setCooldownDraft((prev) => ({ ...prev, [key]: rawValue }));
-    try {
-      const res = await fetch("/api/settings", { cache: "no-store" });
-      const data = res.ok ? await res.json() : {};
-      const current = data.providerStrategies || {};
-      const override = { ...(current[providerId] || {}) };
-      const cooldown = { ...(override.cooldown || {}) };
-      const num = Number(rawValue);
-      const invalid = rawValue === "" || !Number.isFinite(num) || num < 0;
-      if (invalid) delete cooldown[key];
-      else cooldown[key] = key === "maxBackoffLevel" ? Math.floor(num) : Math.round(num * 60 * 1000);
-      if (Object.keys(cooldown).length === 0) delete override.cooldown;
-      else override.cooldown = cooldown;
-      const updated = { ...current };
-      if (Object.keys(override).length === 0) delete updated[providerId];
-      else updated[providerId] = override;
-      await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerStrategies: updated }) });
-    } catch (e) { console.log("saveCooldown error:", e); }
-  };
-
-  const clearCooldown = async () => {
-    setCooldownDraft({});
-    try {
-      const res = await fetch("/api/settings", { cache: "no-store" });
-      const data = res.ok ? await res.json() : {};
-      const current = data.providerStrategies || {};
-      const override = { ...(current[providerId] || {}) };
-      delete override.cooldown;
-      const updated = { ...current };
-      if (Object.keys(override).length === 0) delete updated[providerId];
-      else updated[providerId] = override;
-      await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerStrategies: updated }) });
-    } catch (e) { console.log("clearCooldown error:", e); }
   };
 
   const handleSwapPriority = async (i1, i2) => {
@@ -499,33 +440,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
           </div>
         </div>
 
-        {showCooldown && (
-          <div className="mb-4 rounded-lg border border-border p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium">Cooldown override</span>
-                <p className="text-xs text-text-muted">
-                  How long this provider&apos;s accounts are benched after an error. Blank = use the default.
-                </p>
-              </div>
-              <Button size="sm" variant="ghost" onClick={clearCooldown}>Clear</Button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {COOLDOWN_FIELDS.map((f) => (
-                <label key={f.key} className="flex flex-col gap-1">
-                  <span className="text-xs text-text-muted">{f.label}</span>
-                  <input
-                    type="number" min={0} step={f.step}
-                    value={cooldownDraft[f.key] ?? ""}
-                    placeholder={f.placeholder}
-                    onChange={(e) => saveCooldown(f.key, e.target.value)}
-                    className="w-full px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:border-primary"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
+        {showCooldown && <CooldownOverrideSection providerId={providerId} />}
 
         {connections.length === 0 ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
