@@ -8,8 +8,7 @@ import { planBulkAdd } from "@/shared/utils/bulkAdd";
 
 const BULK_PLACEHOLDER = `name1|sk-key1\nname2|sk-key2\nsk-key-only-auto-named`;
 
-export default function AddApiKeyModal({ isOpen, provider, providerName, isCompatible, isAnthropic, authType, authHint, website, proxyPools, error, existingNames, onSave, onBulkDone, onClose }) {
-  const NONE_PROXY_POOL_VALUE = "__none__";
+export default function AddApiKeyModal({ isOpen, provider, providerName, isCompatible, isAnthropic, authType, authHint, website, error, existingNames, onSave, onBulkDone, onClose }) {
   const isOllamaLocal = provider === "ollama-local";
   const isCookie = authType === "cookie";
   const isXaiApiKey = provider === "xai" && !isCookie;
@@ -28,7 +27,6 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
     apiKey: "",
     defaultModel: "",
     priority: 1,
-    proxyPoolId: NONE_PROXY_POOL_VALUE,
     ollamaHostUrl: "",
   });
   const [azureData, setAzureData] = useState({
@@ -124,7 +122,6 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
         apiKey: formData.apiKey,
         defaultModel: isCompatible ? formData.defaultModel.trim() : undefined,
         priority: formData.priority,
-        proxyPoolId: formData.proxyPoolId === NONE_PROXY_POOL_VALUE ? null : formData.proxyPoolId,
         testStatus: isValid ? "active" : "unknown",
         providerSpecificData: buildProviderSpecificData()
       });
@@ -371,27 +368,6 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
           onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value) || 1 })}
         />
 
-        <Select
-          label="Proxy Pool"
-          value={formData.proxyPoolId}
-          onChange={(e) => setFormData({ ...formData, proxyPoolId: e.target.value })}
-          options={[
-            { value: NONE_PROXY_POOL_VALUE, label: "None" },
-            ...(proxyPools || []).map((pool) => ({ value: pool.id, label: pool.name })),
-          ]}
-          placeholder="None"
-        />
-
-        {(proxyPools || []).length === 0 && (
-          <p className="text-xs text-text-muted">
-            No active proxy pools available. Create one in Proxy Pools page first.
-          </p>
-        )}
-
-        <p className="text-xs text-text-muted">
-          Legacy manual proxy fields are still accepted by API for backward compatibility.
-        </p>
-
         <div className="flex gap-2">
           <Button onClick={handleSubmit} fullWidth disabled={saving || (!isOllamaLocal && (!formData.name || !formData.apiKey)) || (isCompatible && !formData.defaultModel.trim()) || (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) || (isCloudflareAi && !cloudflareData.accountId)}>
             {saving ? "Saving..." : "Save"}
@@ -415,10 +391,6 @@ AddApiKeyModal.propTypes = {
   authType: PropTypes.string,
   authHint: PropTypes.string,
   website: PropTypes.string,
-  proxyPools: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string,
-    name: PropTypes.string,
-  })),
   error: PropTypes.string,
   existingNames: PropTypes.arrayOf(PropTypes.string),
   onSave: PropTypes.func.isRequired,

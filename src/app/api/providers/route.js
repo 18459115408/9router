@@ -4,7 +4,6 @@ import {
   createProviderConnection,
   getProviderNodeById,
   getProviderNodes,
-  getProxyPoolById,
 } from "@/models";
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
@@ -26,24 +25,6 @@ function normalizeProxyConfig(body = {}) {
     connectionProxyUrl: url,
     connectionNoProxy: noProxy,
   };
-}
-
-async function normalizeProxyPoolId(proxyPoolId) {
-  if (proxyPoolId === undefined || proxyPoolId === null || proxyPoolId === "" || proxyPoolId === "__none__") {
-    return { proxyPoolId: null };
-  }
-
-  const normalizedId = String(proxyPoolId).trim();
-  if (!normalizedId) {
-    return { proxyPoolId: null };
-  }
-
-  const proxyPool = await getProxyPoolById(normalizedId);
-  if (!proxyPool) {
-    return { error: "Proxy pool not found" };
-  }
-
-  return { proxyPoolId: normalizedId };
 }
 
 // GET /api/providers - List all connections
@@ -93,12 +74,6 @@ export async function POST(request) {
     if (proxyConfig.error) {
       return NextResponse.json({ error: proxyConfig.error }, { status: 400 });
     }
-
-    const proxyPoolResult = await normalizeProxyPoolId(body.proxyPoolId);
-    if (proxyPoolResult.error) {
-      return NextResponse.json({ error: proxyPoolResult.error }, { status: 400 });
-    }
-    const proxyPoolId = proxyPoolResult.proxyPoolId;
 
     // Validation
     const isWebCookieProvider = !!WEB_COOKIE_PROVIDERS[provider];
@@ -167,10 +142,6 @@ export async function POST(request) {
       connectionProxyUrl: proxyConfig.connectionProxyUrl,
       connectionNoProxy: proxyConfig.connectionNoProxy,
     };
-
-    if (proxyPoolId !== null) {
-      mergedProviderSpecificData.proxyPoolId = proxyPoolId;
-    }
 
     const newConnection = await createProviderConnection({
       provider,

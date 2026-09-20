@@ -228,16 +228,6 @@ describe("DB SQLite layer — public API parity", () => {
     expect(await sqliteDb.getProviderNodeById(n.id)).toBeNull();
   });
 
-  it("proxyPools: CRUD with sort by updatedAt desc", async () => {
-    const p1 = await sqliteDb.createProxyPool({ name: "p1", proxyUrl: "http://a", type: "http" });
-    await new Promise((r) => setTimeout(r, 10));
-    const p2 = await sqliteDb.createProxyPool({ name: "p2", proxyUrl: "http://b", type: "http" });
-    const list = await sqliteDb.getProxyPools();
-    expect(list[0].id).toBe(p2.id); // newest first
-    await sqliteDb.deleteProxyPool(p1.id);
-    await sqliteDb.deleteProxyPool(p2.id);
-  });
-
   it("combos: CRUD", async () => {
     const c = await sqliteDb.createCombo({ name: "combo1", models: ["m1", "m2"], kind: "fallback" });
     expect(c.id).toBeDefined();

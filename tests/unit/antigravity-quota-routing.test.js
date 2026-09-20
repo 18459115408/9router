@@ -10,13 +10,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/localDb", () => ({
   getProviderConnections: mocks.getProviderConnections,
   getSettings: mocks.getSettings,
-  getProxyPools: vi.fn(),
   validateApiKey: vi.fn(),
   updateProviderConnection: vi.fn(),
 }));
 vi.mock("@/lib/network/connectionProxy", () => ({
   resolveConnectionProxyConfig: mocks.resolveConnectionProxyConfig,
-  pickProxyPoolId: vi.fn(),
 }));
 vi.mock("@/shared/constants/providers.js", () => ({
   FREE_PROVIDERS: {},

@@ -12,20 +12,17 @@ const mocks = vi.hoisted(() => ({
   getProviderConnections: vi.fn(),
   updateProviderConnection: vi.fn(),
   getSettings: vi.fn(),
-  getProxyPools: vi.fn(),
 }));
 
 vi.mock("@/lib/localDb", () => ({
   getProviderConnections: mocks.getProviderConnections,
   updateProviderConnection: mocks.updateProviderConnection,
   getSettings: mocks.getSettings,
-  getProxyPools: mocks.getProxyPools,
   validateApiKey: vi.fn(),
 }));
 
 vi.mock("@/lib/network/connectionProxy", () => ({
   resolveConnectionProxyConfig: vi.fn(async () => ({})),
-  pickProxyPoolId: vi.fn(() => null),
 }));
 
 vi.mock("open-sse/services/accountFallback.js", async (importOriginal) => {

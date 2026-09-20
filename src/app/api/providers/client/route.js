@@ -13,7 +13,7 @@ const SAFE_FIELDS = [
 
 const SAFE_PSD_FIELDS = [
   "baseUrl", "azureEndpoint", "deployment", "apiVersion", "accountId",
-  "region", "projectId", "resourceUrl", "proxyPoolId",
+  "region", "projectId", "resourceUrl",
   "connectionProxyEnabled", "connectionProxyUrl", "connectionNoProxy",
   "githubLogin", "githubName", "githubEmail", "githubUserId",
   "username", "firstName", "lastName", "authMethod", "authKind",

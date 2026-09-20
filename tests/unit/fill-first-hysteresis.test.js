@@ -15,7 +15,6 @@ vi.mock("@/lib/localDb", () => ({
     [...store].sort((x, y) => (x.priority || 999) - (y.priority || 999)).map(c => ({ ...c }))
   ),
   getSettings: vi.fn(async () => ({})),
-  getProxyPools: vi.fn(async () => []),
   validateApiKey: vi.fn(),
   updateProviderConnection: mocks.updateProviderConnection.mockImplementation(async (id, patch) => {
     Object.assign(store.find(c => c.id === id), patch);
@@ -23,7 +22,6 @@ vi.mock("@/lib/localDb", () => ({
 }));
 vi.mock("@/lib/network/connectionProxy", () => ({
   resolveConnectionProxyConfig: vi.fn(async () => ({})),
-  pickProxyPoolId: vi.fn(),
 }));
 vi.mock("@/shared/constants/providers.js", () => ({
   FREE_PROVIDERS: {},

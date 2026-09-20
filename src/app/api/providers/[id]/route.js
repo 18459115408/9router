@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   getProviderConnectionById,
-  getProxyPoolById,
   updateProviderConnection,
   deleteProviderConnection,
 } from "@/models";
@@ -33,30 +32,8 @@ function normalizeProxyConfig(body = {}) {
   };
 }
 
-async function normalizeProxyPoolUpdate(proxyPoolIdInput) {
-  if (proxyPoolIdInput === undefined) {
-    return { hasProxyPoolField: false, proxyPoolId: null };
-  }
-
-  if (proxyPoolIdInput === null || proxyPoolIdInput === "" || proxyPoolIdInput === "__none__") {
-    return { hasProxyPoolField: true, proxyPoolId: null };
-  }
-
-  const proxyPoolId = String(proxyPoolIdInput).trim();
-  if (!proxyPoolId) {
-    return { hasProxyPoolField: true, proxyPoolId: null };
-  }
-
-  const proxyPool = await getProxyPoolById(proxyPoolId);
-  if (!proxyPool) {
-    return { hasProxyPoolField: true, error: "Proxy pool not found" };
-  }
-
-  return { hasProxyPoolField: true, proxyPoolId };
-}
-
-function shouldMergeProviderSpecificData(existing, incoming, hasLegacyProxy, hasProxyPoolField) {
-  return existing !== undefined || incoming !== undefined || hasLegacyProxy || hasProxyPoolField;
+function shouldMergeProviderSpecificData(existing, incoming, hasLegacyProxy) {
+  return existing !== undefined || incoming !== undefined || hasLegacyProxy;
 }
 
 // GET /api/providers/[id] - Get single connection
@@ -111,11 +88,6 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: proxyConfig.error }, { status: 400 });
     }
 
-    const proxyPoolResult = await normalizeProxyPoolUpdate(body.proxyPoolId);
-    if (proxyPoolResult.error) {
-      return NextResponse.json({ error: proxyPoolResult.error }, { status: 400 });
-    }
-
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (priority !== undefined) updateData.priority = priority;
@@ -131,8 +103,7 @@ export async function PUT(request, { params }) {
       shouldMergeProviderSpecificData(
         existing.providerSpecificData,
         providerSpecificData,
-        proxyConfig.hasAnyProxyField,
-        proxyPoolResult.hasProxyPoolField
+        proxyConfig.hasAnyProxyField
       )
     ) {
       updateData.providerSpecificData = {
@@ -144,14 +115,6 @@ export async function PUT(request, { params }) {
         updateData.providerSpecificData.connectionProxyEnabled = proxyConfig.connectionProxyEnabled;
         updateData.providerSpecificData.connectionProxyUrl = proxyConfig.connectionProxyUrl;
         updateData.providerSpecificData.connectionNoProxy = proxyConfig.connectionNoProxy;
-      }
-
-      if (proxyPoolResult.hasProxyPoolField) {
-        if (proxyPoolResult.proxyPoolId === null) {
-          delete updateData.providerSpecificData.proxyPoolId;
-        } else {
-          updateData.providerSpecificData.proxyPoolId = proxyPoolResult.proxyPoolId;
-        }
       }
     }
 
