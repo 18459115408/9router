@@ -46,6 +46,39 @@ function startBackgroundTokenRefreshFromCustomServer() {
     });
 }
 
+let baiduSyncStarted = false;
+
+function startBaiduSyncFromCustomServer() {
+  if (baiduSyncStarted) return;
+  baiduSyncStarted = true;
+  // Same fail-open deal: instrumentation.js starts the scheduler inside the Next
+  // runtime; this covers bare custom-server boots. The module lazily imports the
+  // engine, so loading it here is safe even without Next's path aliases.
+  const modPath = path.join(__dirname, "src", "lib", "sync", "baidu", "index.js");
+  import(pathToFileURL(modPath).href)
+    .then((m) => {
+      try {
+        m.startBaiduSync();
+      } catch (e) {
+        console.error("[BaiduSync] start failed:", e && e.message ? e.message : e);
+      }
+      const stop = () => {
+        try {
+          m.stopBaiduSync();
+        } catch {
+          /* ignore */
+        }
+      };
+      process.once("SIGINT", stop);
+      process.once("SIGTERM", stop);
+    })
+    .catch((e) => {
+      if (process.env.DEBUG_BAIDU_SYNC) {
+        console.error("[BaiduSync] import failed:", e && e.message ? e.message : e);
+      }
+    });
+}
+
 // Wrap Next standalone HTTP server: derive client IP from the TCP socket
 // (unspoofable) and strip client-supplied forwarding headers so downstream
 // rate-limiting keys on the real peer address instead of attacker-controlled XFF.
@@ -75,6 +108,7 @@ http.createServer = (...args) => {
   const server = origCreate(...rest, wrapped);
   server.once("listening", () => {
     startBackgroundTokenRefreshFromCustomServer();
+    startBaiduSyncFromCustomServer();
   });
   const origEmit = server.emit;
   // JBR 25 sends h2c upgrades that the HTTP/1.1 server would otherwise close.

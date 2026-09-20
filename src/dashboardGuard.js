@@ -31,6 +31,9 @@ const PUBLIC_API_PATHS = [
   "/api/auth/saml",
   "/api/version",
   "/api/settings/require-login",
+  // Baidu OAuth redirect target: only exchanges a code minted for this app,
+  // never echoes the token. All other /api/sync/baidu/* routes stay auth-gated.
+  "/api/sync/baidu/callback",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).

@@ -10,5 +10,9 @@ export async function register() {
 
     const { startModelCatalogSync } = await import("@/lib/modelCatalog/sync.js");
     startModelCatalogSync();
+
+    // Baidu Netdisk DB sync (per-instance scheduler; no-op unless configured).
+    const { startBaiduSync } = await import("@/lib/sync/baidu/index.js");
+    startBaiduSync();
   }
 }

@@ -1,3 +1,8 @@
+# Unreleased
+
+## Features
+- **Baidu Netdisk Sync**: optional multi-instance DB sync via the pan.baidu.com OpenAPI — every `BAIDU_SYNC_INTERVAL_MINUTES` (default 30) the instance checks the cloud snapshot (1 API call), pulls it if another machine pushed newer data, and pushes a gzip+AES-256-GCM encrypted SQLite snapshot only when local content changed (single-step upload ≤2GB, chunked 4MB fallback, `ondup=overwrite`). Conflict semantics are file-level last-writer-wins; a full local snapshot is archived under `db/backups/sync-apply-*` before any pull is applied. `BAIDU_SYNC_EXCLUDE_TABLES` (default `requestDetails`) stays machine-local and is never overwritten by a pull. Token state lives in `<DATA_DIR>/baidu-sync/` (outside the synced DB) with independent refresh chains per instance; refresh_token is single-use and rotated atomically. Manual flow: `GET /api/sync/baidu/authorize` → paste code into `/api/sync/baidu/exchange?code=…` (or register `BAIDU_REDIRECT_URI` for the automatic `/api/sync/baidu/callback`); `GET /api/sync/baidu/status` and `POST /api/sync/baidu/trigger` for ops. Quota hits (errno 20012/9013) back off exponentially up to 6h.
+
 # v0.5.81 (2026-09-18)
 
 ## Features
