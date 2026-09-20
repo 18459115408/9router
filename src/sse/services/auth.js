@@ -215,8 +215,20 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         });
       }
     } else {
-      // Default: fill-first (already sorted by priority in getProviderConnections)
-      connection = availableConnections[0];
+      // Default: fill-first with failover hysteresis. Stay on the current
+      // account (most recently used) until IT fails, then switch to the next.
+      // Without stickiness a recovered account jumps straight back to the front
+      // of the priority queue and sessions ping-pong between accounts — the
+      // provider-side prefix cache is bound per API key, so every flip means a
+      // full cold start on a multi-hundred-KB conversation body.
+      const byRecency = [...availableConnections].sort((a, b) => {
+        if (!a.lastUsedAt && !b.lastUsedAt) return (a.priority || 999) - (b.priority || 999);
+        if (!a.lastUsedAt) return 1;
+        if (!b.lastUsedAt) return -1;
+        return new Date(b.lastUsedAt) - new Date(a.lastUsedAt);
+      });
+      connection = byRecency[0] || availableConnections[0];
+      await updateProviderConnection(connection.id, { lastUsedAt: new Date().toISOString() });
     }
 
     const resolvedProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
