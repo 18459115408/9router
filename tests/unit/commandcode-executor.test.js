@@ -4,7 +4,6 @@ import {
   inspectAndWrapCommandCodeResponse,
   CommandCodeExecutor,
 } from "../../open-sse/executors/commandcode.js";
-import { handleComboChat } from "../../open-sse/services/combo.js";
 
 function createNdjsonStream(lines) {
   const encoder = new TextEncoder();
@@ -171,62 +170,5 @@ describe("inspectAndWrapCommandCodeResponse", () => {
     expect(callCount).toBe(2);
     const text = await res.response.text();
     expect(text).toContain("Recovered from lost connection");
-  });
-});
-
-describe("CommandCode in Combo Fallback", () => {
-  it("automatically falls back to next model when commandcode returns 503 error", async () => {
-    const log = {
-      info: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn(),
-    };
-
-    const handleSingleModel = vi.fn(async (body, modelStr) => {
-      if (modelStr === "commandcode/poolside/laguna-s-2.1-free") {
-        // Simulated failed CommandCode response
-        return new Response(
-          JSON.stringify({
-            error: {
-              message: "Service temporarily unavailable. Please try again shortly.",
-              type: "server_error",
-              code: 503,
-            },
-          }),
-          { status: 503, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      if (modelStr === "openai/gpt-4o-mini") {
-        // Fallback model succeeds
-        return new Response(
-          JSON.stringify({
-            id: "chatcmpl-test",
-            choices: [{ message: { role: "assistant", content: "Fallback success!" } }],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-
-    const comboResponse = await handleComboChat({
-      body: { messages: [{ role: "user", content: "Hello" }] },
-      models: ["commandcode/poolside/laguna-s-2.1-free", "openai/gpt-4o-mini"],
-      handleSingleModel,
-      log,
-      comboName: "test-combo",
-      comboStrategy: "fallback",
-    });
-
-    expect(comboResponse.ok).toBe(true);
-    expect(comboResponse.status).toBe(200);
-
-    const data = await comboResponse.json();
-    expect(data.choices[0].message.content).toBe("Fallback success!");
-    expect(handleSingleModel).toHaveBeenCalledTimes(2);
-    expect(handleSingleModel).toHaveBeenNthCalledWith(1, expect.anything(), "commandcode/poolside/laguna-s-2.1-free");
-    expect(handleSingleModel).toHaveBeenNthCalledWith(2, expect.anything(), "openai/gpt-4o-mini");
   });
 });

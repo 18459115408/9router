@@ -2,7 +2,6 @@ const api = require("./api/client");
 const { showMenuWithBack } = require("./utils/menuHelper");
 const { showProvidersMenu } = require("./menus/providers");
 const { showApiKeysMenu } = require("./menus/apiKeys");
-const { showCombosMenu } = require("./menus/combos");
 const { showSettingsMenu } = require("./menus/settings");
 const { showCliToolsMenu } = require("./menus/cliTools");
 
@@ -89,13 +88,6 @@ async function startTerminalUI(port) {
         label: "API Keys",
         action: async () => {
           await showApiKeysMenu(port, [...basePath, "API Keys"]);
-          return true;
-        }
-      },
-      {
-        label: "Combos",
-        action: async () => {
-          await showCombosMenu([...basePath, "Combos"]);
           return true;
         }
       },

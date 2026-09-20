@@ -20,9 +20,6 @@ const DEFAULT_SETTINGS = {
   // constants in open-sse/config/errorConfig.js. See DESIGN-provider-cooldown.md.
   providerStrategies: {},
   quotaVisibility: {},
-  comboStrategy: "fallback",
-  comboStickyRoundRobinLimit: 1,
-  comboStrategies: {},
   requireLogin: true,
   requireApiKey: true,
   tunnelDashboardAccess: true,

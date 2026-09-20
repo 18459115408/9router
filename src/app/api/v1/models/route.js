@@ -5,7 +5,7 @@ import {
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
+import { getProviderConnections, getCustomModels, getModelAliases } from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
@@ -143,7 +143,7 @@ const parseOpenAIStyleModels = (data) => {
 // and break recursive loops between 9router instances connected to each other.
 const INTERNAL_MODELS_FETCH_HEADER = "x-9r-internal-models-fetch";
 
-// LLM kind sentinel — combos/models with no explicit kind default to LLM
+// LLM kind sentinel — models with no explicit kind default to LLM
 const LLM_KIND = "llm";
 
 // Map per-model `type` field (in PROVIDER_MODELS) to service kind.
@@ -240,13 +240,6 @@ function providerMatchesKinds(providerId, kindFilter) {
   return kindFilter.some((k) => kinds.includes(k));
 }
 
-// Combo matches kindFilter when its `kind` field is in the list.
-// Combos with no kind are treated as LLM.
-function comboMatchesKinds(combo, kindFilter) {
-  const kind = combo?.kind || LLM_KIND;
-  return kindFilter.includes(kind);
-}
-
 /**
  * Build OpenAI-format models list filtered by service kinds.
  * @param {string[]} kindFilter - List of service kinds to include (e.g. ["llm"], ["webSearch","webFetch"]).
@@ -262,13 +255,6 @@ export async function buildModelsList(kindFilter, options = {}) {
     connections = connections.filter(c => c.isActive !== false);
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
-  }
-
-  let combos = [];
-  try {
-    combos = await getCombos();
-  } catch (e) {
-    console.log("Could not fetch combos");
   }
 
   let customModels = [];
@@ -301,20 +287,6 @@ export async function buildModelsList(kindFilter, options = {}) {
   }
 
   const models = [];
-
-  // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.
-  for (const combo of combos) {
-    if (!comboMatchesKinds(combo, kindFilter)) continue;
-    const entry = {
-      id: combo.name,
-      object: "model",
-      owned_by: "combo",
-    };
-    if (combo.kind === "webSearch" || combo.kind === "webFetch") {
-      entry.kind = combo.kind;
-    }
-    models.push(entry);
-  }
 
   if (connections.length === 0) {
     // DB unavailable -> return static models, filtered by per-model kind

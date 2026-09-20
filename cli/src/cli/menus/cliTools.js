@@ -100,7 +100,7 @@ async function claudeQuickSetup(port) {
  */
 async function claudeSelectModel(modelType, port) {
   const current = await getClaudeModel(modelType.envKey);
-  const selected = await selectModelFromList(`Select ${modelType.name} Model`, current, { excludeCombos: true });
+  const selected = await selectModelFromList(`Select ${modelType.name} Model`, current);
   if (!selected) return;
 
   const env = { [modelType.envKey]: selected };
@@ -216,7 +216,7 @@ async function codexQuickSetup(port) {
   }
 
   // Get model selection
-  const model = await selectModelFromList("Select Codex Model", "cx/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const model = await selectModelFromList("Select Codex Model", "cx/claude-sonnet-4-5-20250929");
   if (!model) return;
 
   const result = await api.applyCliToolSettings("codex", { baseUrl: endpoint, apiKey, model });
@@ -299,7 +299,7 @@ async function droidQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select Droid Model", "cc/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const model = await selectModelFromList("Select Droid Model", "cc/claude-sonnet-4-5-20250929");
   if (!model) return;
 
   const result = await api.applyCliToolSettings("droid", { baseUrl: endpoint, apiKey, model });
@@ -384,7 +384,7 @@ async function openClawQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select OpenClaw Model", "cc/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const model = await selectModelFromList("Select OpenClaw Model", "cc/claude-sonnet-4-5-20250929");
   if (!model) return;
 
   const result = await api.applyCliToolSettings("openclaw", { baseUrl: endpoint, apiKey, model });
@@ -461,7 +461,7 @@ async function openCodeQuickSetup(port) {
   }
 
   // Pick first model (also becomes active model by default)
-  const firstModel = await selectModelFromList("Select Active Model (OpenCode)", "", { excludeCombos: true });
+  const firstModel = await selectModelFromList("Select Active Model (OpenCode)", "");
   if (!firstModel) return;
 
   const models = [firstModel];
@@ -470,7 +470,7 @@ async function openCodeQuickSetup(port) {
   while (true) {
     const more = await confirm(`Add another model? (current: ${models.length})`);
     if (!more) break;
-    const next = await selectModelFromList(`Add Model #${models.length + 1}`, models.join(", "), { excludeCombos: true });
+    const next = await selectModelFromList(`Add Model #${models.length + 1}`, models.join(", "));
     if (!next) break;
     if (!models.includes(next)) models.push(next);
   }
@@ -479,7 +479,7 @@ async function openCodeQuickSetup(port) {
   let subagentModel = firstModel;
   const wantSubagent = await confirm(`Set a different subagent model? (default: ${firstModel})`);
   if (wantSubagent) {
-    const picked = await selectModelFromList("Select Subagent Model", firstModel, { excludeCombos: true });
+    const picked = await selectModelFromList("Select Subagent Model", firstModel);
     if (picked) subagentModel = picked;
   }
 
@@ -546,7 +546,7 @@ async function hermesQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select Hermes Model", "", { excludeCombos: true });
+  const model = await selectModelFromList("Select Hermes Model", "");
   if (!model) return;
 
   const result = await api.applyCliToolSettings("hermes", { baseUrl: endpoint, apiKey, model });

@@ -93,7 +93,6 @@ export default function ModelSelectModal({
   }, [activeProviders, kindFilter]);
   const { getCaps } = useModelCaps();
   const [searchQuery, setSearchQuery] = useState("");
-  const [combos, setCombos] = useState([]);
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
@@ -116,22 +115,6 @@ export default function ModelSelectModal({
   const cursorModels = useLiveProviderModels(isOpen, cursorConnectionIds, "Cursor");
   const clineModels = useLiveProviderModels(isOpen, clineConnectionIds, "Cline");
   const clinepassModels = useLiveProviderModels(isOpen, clinepassConnectionIds, "ClinePass");
-
-  const fetchCombos = async () => {
-    try {
-      const res = await fetch("/api/combos");
-      if (!res.ok) throw new Error(`Failed to fetch combos: ${res.status}`);
-      const data = await res.json();
-      setCombos(data.combos || []);
-    } catch (error) {
-      console.error("Error fetching combos:", error);
-      setCombos([]);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) fetchCombos();
-  }, [isOpen]);
 
   const fetchProviderNodes = async () => {
     try {
@@ -198,7 +181,7 @@ export default function ModelSelectModal({
     const filterByKind = (models) => {
       // No kindFilter means the LLM selector. Keep custom models visible because
       // user-added models may have typed capabilities (for example imageToText)
-      // while still being valid chat/combo targets.
+      // while still being valid chat targets.
       if (!kindFilter) return models.filter((m) => m.isPlaceholder || m.isCustom || !getModelKind(m) || getModelKind(m) === "llm");
       if (!TYPED_KINDS.has(kindFilter)) return models;
       return models.filter((m) => m.isPlaceholder || getModelKind(m) === kindFilter);
@@ -422,14 +405,6 @@ export default function ModelSelectModal({
     return groups;
   }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, cursorModels, clineModels, clinepassModels]);
 
-  // Filter combos by search query (and hide combos when kindFilter is set — combos are LLM-only by design)
-  const filteredCombos = useMemo(() => {
-    if (kindFilter || capFilter) return [];
-    if (!searchQuery.trim()) return combos;
-    const query = searchQuery.toLowerCase();
-    return combos.filter(c => c.name.toLowerCase().includes(query));
-  }, [combos, searchQuery, kindFilter]);
-
   // Sort models alphabetically, with added models floated to top
   const sortModels = (models) => {
     const added = models.filter(m => addedModelValues.includes(m.value)).sort((a, b) => a.name.localeCompare(b.name));
@@ -519,42 +494,6 @@ export default function ModelSelectModal({
 
       {/* Models grouped by provider - compact */}
       <div className="max-h-[400px] overflow-y-auto space-y-3">
-        {/* Combos section - always first */}
-        {filteredCombos.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
-              <span className="material-symbols-outlined text-primary text-[14px]">layers</span>
-              <span className="text-xs font-medium text-primary">Combos</span>
-              <span className="text-[10px] text-text-muted">({filteredCombos.length})</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {filteredCombos.map((combo) => {
-                const isSelected = selectedModel === combo.name;
-                return (
-                  <button
-                    key={combo.id}
-                    onClick={() => handleSelect({ id: combo.name, name: combo.name, value: combo.name })}
-                    className={`
-                      px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer flex items-center gap-1
-                      ${isSelected
-                        ? "bg-primary text-white border-primary"
-                        : addedModelValues.includes(combo.name)
-                          ? "bg-primary border-primary text-white hover:bg-primary-hover"
-                          : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
-                      }
-                    `}
-                  >
-                    {addedModelValues.includes(combo.name) && (
-                      <span className="material-symbols-outlined leading-none" style={{ fontSize: "10px" }}>check</span>
-                    )}
-                    {combo.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Provider models */}
         {Object.entries(filteredGroups).map(([providerId, group]) => (
           <div key={providerId}>
@@ -625,7 +564,7 @@ export default function ModelSelectModal({
           </div>
         ))}
 
-        {Object.keys(filteredGroups).length === 0 && filteredCombos.length === 0 && (
+        {Object.keys(filteredGroups).length === 0 && (
           <div className="text-center py-4 text-text-muted">
             <span className="material-symbols-outlined text-2xl mb-1 block">
               search_off

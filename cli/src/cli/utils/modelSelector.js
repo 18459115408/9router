@@ -28,64 +28,46 @@ const PROVIDER_ALIAS_NAMES = {
 };
 
 /**
- * Get all available models grouped by provider + combos
- * @returns {Promise<{combos: Array, groups: Object}>}
+ * Get all available models grouped by provider
+ * @returns {Promise<{groups: Object}>}
  */
 async function getAvailableModelsGrouped() {
   const result = await api.getAvailableModels();
-  if (!result.success) return { combos: [], groups: {} };
-  
+  if (!result.success) return { groups: {} };
+
   const models = result.data?.data || [];
-  const combos = [];
   const groups = {};
-  
+
   models.forEach(m => {
-    if (m.owned_by === "combo") {
-      combos.push(m.id);
-    } else {
-      const provider = m.owned_by;
-      if (!groups[provider]) {
-        groups[provider] = [];
-      }
-      groups[provider].push(m.id);
+    const provider = m.owned_by;
+    if (!groups[provider]) {
+      groups[provider] = [];
     }
+    groups[provider].push(m.id);
   });
-  
-  return { combos, groups };
+
+  return { groups };
 }
 
 /**
  * Display model list and prompt for selection with provider grouping & search
  * @param {string} title - Title to display
  * @param {string} currentValue - Current selected value (optional)
- * @param {Object} options - { excludeCombos?: boolean }
  * @returns {Promise<string|null>} Selected model ID or null if cancelled
  */
-async function selectModelFromList(title, currentValue = "", options = {}) {
-  const { excludeCombos = false } = options;
-  const { combos: rawCombos, groups } = await getAvailableModelsGrouped();
-  const combos = excludeCombos ? [] : rawCombos;
+async function selectModelFromList(title, currentValue = "") {
+  const { groups } = await getAvailableModelsGrouped();
 
-  const totalModels = combos.length + Object.values(groups).flat().length;
+  const totalModels = Object.values(groups).flat().length;
   if (totalModels === 0) {
     return null;
   }
 
   // All models for flat search
-  const allModelsList = [
-    ...combos,
-    ...Object.values(groups).flat()
-  ];
+  const allModelsList = Object.values(groups).flat();
 
   // Build category list
   const categories = [];
-  if (combos.length > 0) {
-    categories.push({
-      id: "combos",
-      name: "[Combos]",
-      models: combos
-    });
-  }
 
   const sortedProviders = Object.keys(groups).sort((a, b) => {
     const idxA = PROVIDER_ALIAS_ORDER.indexOf(a);

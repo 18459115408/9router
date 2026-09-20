@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, Button, ManualConfigModal, ComboFormModal, McpMarketplaceModal, ModelSelectModal } from "@/shared/components";
+import { Card, Button, ManualConfigModal, McpMarketplaceModal, ModelSelectModal } from "@/shared/components";
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import { rememberEndpoint } from "./cliEndpointPresets";
@@ -45,7 +45,6 @@ export default function CoworkToolCard({
   const [localPlugins, setLocalPlugins] = useState([]);
   const [customPlugins, setCustomPlugins] = useState([]);
   const [modelAliases, setModelAliases] = useState({});
-  const [comboModalOpen, setComboModalOpen] = useState(false);
   const [modelSelectOpen, setModelSelectOpen] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [addMcpOpen, setAddMcpOpen] = useState(false);
@@ -162,28 +161,6 @@ export default function CoworkToolCard({
       setMessage({ type: "error", text: error.message });
     } finally {
       setApplying(false);
-    }
-  };
-
-  const handleCreateCombo = async ({ name, models }) => {
-    try {
-      const res = await fetch("/api/combos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, models }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setMessage({ type: "error", text: err.error || "Failed to create combo" });
-        return;
-      }
-      if (!selectedModels.includes(name)) {
-        setSelectedModels([...selectedModels, name]);
-      }
-      setComboModalOpen(false);
-      setMessage({ type: "success", text: `Combo "${name}" created and added.` });
-    } catch (error) {
-      setMessage({ type: "error", text: error.message });
     }
   };
 
@@ -349,7 +326,6 @@ export default function CoworkToolCard({
                         ))
                       )}
                     </div>
-                    <button onClick={() => setComboModalOpen(true)} disabled={!hasActiveProviders} className={`shrink-0 px-2 py-1.5 rounded border text-xs whitespace-nowrap transition-colors ${hasActiveProviders ? "bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>+ Combo</button>
                   </div>
                 </div>
 
@@ -519,18 +495,6 @@ export default function CoworkToolCard({
         title="Claude Cowork - Manual Configuration"
         configs={getManualConfigs()}
       />
-
-      {comboModalOpen && (
-        <ComboFormModal
-          isOpen={comboModalOpen}
-          combo={null}
-          onClose={() => setComboModalOpen(false)}
-          onSave={handleCreateCombo}
-          activeProviders={activeProviders}
-          forcePrefix="claude-"
-          title="Create Cowork Combo"
-        />
-      )}
 
       {modelSelectOpen && (
         <ModelSelectModal

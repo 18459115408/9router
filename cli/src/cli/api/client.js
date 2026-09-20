@@ -309,55 +309,6 @@ async function deleteApiKey(id) {
 }
 
 // ============================================================================
-// COMBOS API
-// ============================================================================
-
-/**
- * Get all combos
- * @returns {Promise<Object>} { success, data: { combos } }
- */
-async function getCombos() {
-  return makeRequest("GET", "/api/combos");
-}
-
-/**
- * Get combo by ID
- * @param {string} id - Combo ID
- * @returns {Promise<Object>} { success, data: combo }
- */
-async function getComboById(id) {
-  return makeRequest("GET", `/api/combos/${id}`);
-}
-
-/**
- * Create new combo
- * @param {Object} data - Combo data { name, models }
- * @returns {Promise<Object>} { success, data: combo }
- */
-async function createCombo(data) {
-  return makeRequest("POST", "/api/combos", data);
-}
-
-/**
- * Update combo
- * @param {string} id - Combo ID
- * @param {Object} data - Update data { name?, models? }
- * @returns {Promise<Object>} { success, data: combo }
- */
-async function updateCombo(id, data) {
-  return makeRequest("PUT", `/api/combos/${id}`, data);
-}
-
-/**
- * Delete combo
- * @param {string} id - Combo ID
- * @returns {Promise<Object>} { success, data: { success } }
- */
-async function deleteCombo(id) {
-  return makeRequest("DELETE", `/api/combos/${id}`);
-}
-
-// ============================================================================
 // CLI TOOLS API
 // ============================================================================
 
@@ -431,7 +382,7 @@ async function getModels() {
 }
 
 /**
- * Get available models from active providers + combos (OpenAI compatible)
+ * Get available models from active providers (OpenAI compatible)
  * @returns {Promise<Object>} { success, data: { object, data: [...models] } }
  */
 async function getAvailableModels() {
@@ -520,14 +471,7 @@ module.exports = {
   getApiKeys,
   createApiKey,
   deleteApiKey,
-  
-  // Combos
-  getCombos,
-  getComboById,
-  createCombo,
-  updateCombo,
-  deleteCombo,
-  
+
   // CLI Tools
   getCliToolSettings,
   applyCliToolSettings,
