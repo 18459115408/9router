@@ -1,31 +1,22 @@
 "use client";
 
-import { DEFAULT_LOCALE, LOCALE_COOKIE, normalizeLocale } from "./config";
+// The UI is Chinese-only: source strings are authored in English and the
+// runtime swaps them for their zh-CN translation. English strings that have
+// no key in the map fall through unchanged.
+
+const LOCALE = "zh-CN";
 
 let translationMap = {};
-let currentLocale = DEFAULT_LOCALE;
+let loaded = false;
 let reloadCallbacks = [];
 
-// Read locale from cookie
-function getLocaleFromCookie() {
-  if (typeof document === "undefined") return DEFAULT_LOCALE;
-  const cookie = document.cookie
-    .split(";")
-    .find((c) => c.trim().startsWith(`${LOCALE_COOKIE}=`));
-  const value = cookie ? decodeURIComponent(cookie.split("=")[1]) : DEFAULT_LOCALE;
-  return normalizeLocale(value);
-}
-
-// Load translation map
-async function loadTranslations(locale) {
-  if (locale === "en") {
-    translationMap = {};
-    return;
-  }
-  
+// Load translation map (once - the locale is fixed)
+async function loadTranslations() {
+  if (loaded) return;
   try {
-    const response = await fetch(`/i18n/literals/${locale}.json`);
+    const response = await fetch(`/i18n/literals/${LOCALE}.json`);
     translationMap = await response.json();
+    loaded = true;
   } catch (err) {
     console.error("Failed to load translations:", err);
     translationMap = {};
@@ -37,13 +28,12 @@ export function translate(text) {
   if (!text || typeof text !== "string") return text;
   const trimmed = text.trim();
   if (!trimmed) return text;
-  if (currentLocale === "en") return text;
   return translationMap[trimmed] || text;
 }
 
 // Get current locale - exported for use in components
 export function getCurrentLocale() {
-  return currentLocale;
+  return LOCALE;
 }
 
 // Register callback for locale changes
@@ -124,8 +114,7 @@ function processElement(element) {
 export async function initRuntimeI18n() {
   if (typeof window === "undefined") return;
   
-  currentLocale = getLocaleFromCookie();
-  await loadTranslations(currentLocale);
+  await loadTranslations();
   
   // Process existing DOM
   processElement(document.body);
@@ -149,10 +138,9 @@ export async function initRuntimeI18n() {
   });
 }
 
-// Reload translations when locale changes
+// Re-process the DOM (called on route changes)
 export async function reloadTranslations() {
-  currentLocale = getLocaleFromCookie();
-  await loadTranslations(currentLocale);
+  await loadTranslations();
   
   // Notify all registered callbacks
   reloadCallbacks.forEach(callback => callback());
