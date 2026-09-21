@@ -53,6 +53,7 @@ docs/*
 !docs/ARCHITECTURE.md
 !docs/UPSTREAM-SYNC.md
 !docs/FEATURE-REMOVAL-PLAN.md
+!docs/BAIDU-SYNC.md
 test/*
 open-sse/test/*
 RM.vn.md
