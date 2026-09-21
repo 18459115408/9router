@@ -8,6 +8,7 @@ import {
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
 import { normalizeProviderId, normalizeProviderSpecificData } from "@/lib/providerNormalization";
+import { findCredentialDuplicates, findDuplicateForConnection } from "@/lib/connectionIdentity";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,10 @@ export async function GET() {
   try {
     const connections = await getProviderConnections();
 
+    // Flag rows that authenticate as the same upstream account so the UI can
+    // warn about them. Computed from the full rows, before tokens are stripped.
+    const credentialDuplicates = findCredentialDuplicates(connections);
+
     // Build nodeNameMap for compatible providers (id → name)
     let nodeNameMap = {};
     try {
@@ -54,6 +59,7 @@ export async function GET() {
         accessToken: undefined,
         refreshToken: undefined,
         idToken: undefined,
+        duplicateOf: credentialDuplicates.get(c.id) || null,
       };
     });
 
@@ -160,7 +166,8 @@ export async function POST(request) {
     const result = { ...newConnection };
     delete result.apiKey;
 
-    return NextResponse.json({ connection: result }, { status: 201 });
+    const duplicate = await findDuplicateForConnection(newConnection);
+    return NextResponse.json({ connection: result, ...(duplicate ? { duplicate } : {}) }, { status: 201 });
   } catch (error) {
     console.log("Error creating provider:", error);
     return NextResponse.json({ error: "Failed to create provider" }, { status: 500 });

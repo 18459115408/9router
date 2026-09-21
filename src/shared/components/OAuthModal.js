@@ -47,6 +47,9 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const [authMode, setAuthMode] = useState("browser"); // "browser" | "paste-token"
   const [pasteToken, setPasteToken] = useState("");
   const [ideStatus, setIdeStatus] = useState(null);
+  // Set when the just-authorized credential turns out to belong to an
+  // account that is already connected (same token or same upstream user).
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
   const popupRef = useRef(null);
   const pollingAbortRef = useRef(false);
   const openedRef = useRef(false);
@@ -104,6 +107,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      setDuplicateWarning(data.duplicate || null);
       setStep("success");
       onSuccessRef.current?.();
     } catch (err) {
@@ -123,6 +127,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      setDuplicateWarning(data.duplicate || null);
       setStep("success");
       onSuccessRef.current?.();
     } catch (err) {
@@ -169,6 +174,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
         if (data.success) {
           pollingAbortRef.current = true; // Stop polling immediately
+          setDuplicateWarning(data.duplicate || null);
           setStep("success");
           setPolling(false);
           onSuccessRef.current?.();
@@ -481,6 +487,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     setAuthData(null);
     setCallbackUrl("");
     setError(null);
+    setDuplicateWarning(null);
     setIsDeviceCode(false);
     setDeviceData(null);
     setPolling(false);
@@ -659,6 +666,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
+        setDuplicateWarning(data.duplicate || null);
         setStep("success");
         onSuccessRef.current?.();
         return;
@@ -683,6 +691,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
+        setDuplicateWarning(data.duplicate || null);
         setStep("success");
         onSuccessRef.current?.();
         return;
@@ -953,6 +962,22 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
             <p className="text-sm text-text-muted mb-4">
               Your {providerInfo.name} account has been connected.
             </p>
+            {duplicateWarning && (
+              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-left dark:border-amber-700/50 dark:bg-amber-900/20">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  {duplicateWarning.reason === "same-token"
+                    ? "This login returned a token that is already in use."
+                    : "This login returned an account that is already connected."}
+                </p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  The credential belongs to the same upstream account as
+                  {" "}<span className="font-medium">{duplicateWarning.of?.name || "another connection"}</span>.
+                  Both connections share one quota, so failover between them cannot add capacity.
+                  The browser session was probably still signed in as that user — sign out
+                  there first, then add this account again.
+                </p>
+              </div>
+            )}
             <Button onClick={handleClose} fullWidth>
               Done
             </Button>

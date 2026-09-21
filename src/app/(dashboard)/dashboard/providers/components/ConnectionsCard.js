@@ -80,6 +80,14 @@ function ConnectionRow({ connection, isOAuth, isFirst, isLast, onMoveUp, onMoveD
             {connection.lastError && connection.isActive !== false && (
               <span className="text-xs text-red-500 truncate max-w-[300px]" title={connection.lastError}>{connection.lastError}</span>
             )}
+            {connection.duplicateOf && (
+              <span
+                className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[300px]"
+                title={`Same ${connection.duplicateOf.reason === "same-token" ? "token" : "upstream account"} as ${connection.duplicateOf.of?.name || "another connection"} — they share one quota`}
+              >
+                {connection.duplicateOf.reason === "same-token" ? "Same token as" : "Same account as"} {connection.duplicateOf.of?.name || "another connection"}
+              </span>
+            )}
             <span className="text-xs text-text-muted">#{connection.priority}</span>
           </div>
         </div>
@@ -111,6 +119,10 @@ ConnectionRow.propTypes = {
     isActive: PropTypes.bool,
     lastError: PropTypes.string,
     priority: PropTypes.number,
+    duplicateOf: PropTypes.shape({
+      reason: PropTypes.string,
+      of: PropTypes.shape({ id: PropTypes.string, name: PropTypes.string }),
+    }),
   }).isRequired,
   isOAuth: PropTypes.bool.isRequired,
   isFirst: PropTypes.bool.isRequired,

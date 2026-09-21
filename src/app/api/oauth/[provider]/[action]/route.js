@@ -8,6 +8,7 @@ import {
   pollForToken
 } from "@/lib/oauth/providers";
 import { createProviderConnection } from "@/models";
+import { findDuplicateForConnection } from "@/lib/connectionIdentity";
 import { readDesktopPassToken } from "open-sse/shared/mimoAccount.js";
 import {
   startCodexProxy,
@@ -44,6 +45,16 @@ import {
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
 
+/**
+ * Warn when a freshly saved connection authenticates upstream as the same
+ * account as an existing one — typically a browser SSO session that was
+ * never switched, so the "new" account is really the old one.
+ */
+async function duplicateWarning(connection) {
+  const duplicate = await findDuplicateForConnection(connection);
+  return duplicate ? { duplicate } : {};
+}
+
 async function completeXaiManualCode(code, state) {
   const session = state ? getXaiSessionStatus(state) : null;
   if (!session) {
@@ -75,6 +86,7 @@ async function completeXaiManualCode(code, state) {
       provider: connection.provider,
       email: connection.email,
       displayName: connection.displayName,
+      ...(await duplicateWarning(connection)),
     };
   } catch (err) {
     clearXaiSession(state);
@@ -372,6 +384,7 @@ export async function POST(request, { params }) {
               email: connection.email,
               displayName: connection.displayName,
             },
+            ...(await duplicateWarning(connection)),
           });
         } catch (err) {
           clearXiaomiMimoSession(state);
@@ -405,7 +418,8 @@ export async function POST(request, { params }) {
               provider: connection.provider,
               email: connection.email,
               displayName: connection.displayName,
-            }
+            },
+            ...(await duplicateWarning(connection)),
           });
         } catch (err) {
           return NextResponse.json({ error: err.message }, { status: 500 });
@@ -450,7 +464,8 @@ export async function POST(request, { params }) {
             provider: connection.provider,
             email: connection.email,
             displayName: connection.displayName,
-          }
+          },
+          ...(await duplicateWarning(connection)),
         });
       }
 
@@ -479,14 +494,15 @@ export async function POST(request, { params }) {
         testStatus: "active",
       });
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         connection: {
           id: connection.id,
           provider: connection.provider,
           email: connection.email,
           displayName: connection.displayName,
-        }
+        },
+        ...(await duplicateWarning(connection)),
       });
     }
 
@@ -535,12 +551,13 @@ export async function POST(request, { params }) {
           testStatus: "active",
         });
 
-        return NextResponse.json({ 
-          success: true, 
+        return NextResponse.json({
+          success: true,
           connection: {
             id: connection.id,
             provider: connection.provider,
-          }
+          },
+          ...(await duplicateWarning(connection)),
         });
       }
 
