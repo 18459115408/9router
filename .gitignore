@@ -51,6 +51,7 @@ source/*
 .cursor/*
 docs/*
 !docs/ARCHITECTURE.md
+!docs/UPSTREAM-SYNC.md
 test/*
 open-sse/test/*
 RM.vn.md
@@ -90,6 +91,11 @@ graphify-out/*
 # Kiro local workspace state
 .kiro/
 9router-*
+
+# ZCode agent scratch & local tool config
+/.zcode/
+/.zcodeignore
+/tests/.zcode/
 
 # Local sensitive / temp files
 .engine-token.txt
