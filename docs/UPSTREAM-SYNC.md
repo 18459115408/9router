@@ -1,6 +1,6 @@
 # 上游同步 Runbook（个人项目模式）
 
-> 本仓库是**个人使用项目**：基于 decolua/9router fork，做了减法（移除 combo、proxy-pools、capacity/vision adapter、9Remote 推广等）和加法（百度网盘同步、重复凭证检测等）。
+> 本仓库是**个人使用项目**：基于 decolua/9router fork，做了减法（移除 combo、proxy-pools、capacity/vision adapter、9Remote 推广、gitbook 文档站、多语言系统等）和加法（百度网盘同步、重复凭证检测等）。
 > 编写时间：2026-09-21
 
 ---
@@ -39,6 +39,29 @@ git merge upstream/master
 | 你删掉的功能（combo、proxy-pools、capacity/vision、9Remote 推广、compact 等） | **一律保留删除**。整个文件被删就 `git rm`；上游只是小改就 `git checkout --ours <file>` 再人工核对 |
 | 上游新增的同类推广文件（新的 9Remote 菜单项、combo 新页面等） | 再次删掉，保持个人版干净 |
 | 无关的修复（provider 适配、流式处理、bug 修复） | 照常接受，这是同步的主要收益 |
+
+### 2.1 本仓库整体删除的目录（合并后必须再删）
+
+以下内容上游仍在维护，合并后**会作为新文件复活**，需再次删除：
+
+| 路径 | 说明 |
+|---|---|
+| `gitbook/` | 文档站（独立 Next.js 应用）。上游会持续更新内容 |
+| `.github/workflows/gitbook-pages.yml` | 文档站部署 workflow |
+| `i18n/README.*.md` | README 的机器翻译副本 |
+| `scripts/translate-readme.js` | 生成上面那些副本的脚本 |
+| `public/i18n/literals/*.json`（除 `zh-CN.json` 外） | 非中文语言词库；界面已固定中文 |
+| `src/i18n/config.js`、`LanguageSwitcher.js`、`HeaderLanguage.js`、`src/shared/constants/locales.js`、`src/app/api/locale/` | 语言切换相关；`src/i18n/runtime.js` 是**保留**的精简版，若上游改动它需人工合并（保持固定 zh-CN） |
+
+合并后两条命令检查是否复活：
+
+```bash
+# 目录/文件级：有输出说明上游把它们带回来了
+git ls-files | grep -E "^(gitbook|i18n)/|translate-readme|api/locale|LanguageSwitcher|HeaderLanguage|shared/constants/locales"
+
+# 非中文词库：除 zh-CN.json 外有输出就要删
+git ls-files public/i18n/literals/ | grep -v "zh-CN.json"
+```
 
 冲突量大时，先看看上游这批提交在干什么再动手：
 
