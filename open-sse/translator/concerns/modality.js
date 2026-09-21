@@ -10,7 +10,7 @@ const PLACEHOLDER_CURRENT = {
   audioInput: "[audio omitted: model has no audio support]",
   pdf: "[file omitted: model has no document support]",
 };
-// Earlier turns: neutral (a combo may route to a different model each turn).
+// Earlier turns: neutral.
 const PLACEHOLDER_PREV = {
   vision: "[Previous image omitted from context.]",
   audioInput: "[Previous audio omitted from context.]",

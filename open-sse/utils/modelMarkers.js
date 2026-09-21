@@ -1,7 +1,7 @@
 // Claude Code appends a bracketed context marker to the model name when the
 // 1M-context beta is toggled on: `claude-opus-5` becomes `claude-opus-5[1m]`.
 // The marker is a client-side annotation, not part of any model id: it never
-// matches a combo name, an alias or a `provider/model` pair, so a request that
+// matches an alias or a `provider/model` pair, so a request that
 // carries it dies at model resolution with "Invalid model format".
 //
 // The capability itself travels in the `anthropic-beta: context-1m-2025-08-07`

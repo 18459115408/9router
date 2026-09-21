@@ -39,7 +39,7 @@ export default {
   // Kilo Code proxies the OpenRouter catalog (334 models at time of writing),
   // so the hardcoded list above is only a fallback. Surfacing the full catalog
   // requires a fetcher + passthroughModels, matching how openrouter.js is set up.
-  // Without these, only the 8 hardcoded models appear in the combo model picker,
+  // Without these, only the 8 hardcoded models appear in the model picker,
   // hiding dynamic models like cohere/north-mini-code:free and poolside/laguna-m.1:free.
   modelsFetcher: { url: "https://api.kilo.ai/api/gateway/models", type: "openrouter-free" },
   passthroughModels: true,

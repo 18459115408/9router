@@ -14,9 +14,8 @@
  * gateway (e.g. MiniMax's `api.minimaxi.com/anthropic/v1/messages`), the
  * payload is rejected with an "invalid tool type" / "(2013)" error, which
  * is the same family of failure that PR #2463 was diagnosing from the
- * runtimeTransport side. PR #2463 fixes the combo-path transport
- * selection; this regression closes the translator-side shape gap so
- * single-connection OpenAI clients aren't bit by it once #2463 lands.
+ * runtimeTransport side. This regression closes the translator-side shape
+ * gap so single-connection OpenAI clients aren't bit by it.
  *
  * See: #2435, follow-up to PR #2463.
  */

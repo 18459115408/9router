@@ -160,7 +160,7 @@ export class DefaultExecutor extends BaseExecutor {
     // without `context-management-2025-06-27` upstream rejects the
     // `context_management` block Claude Code puts in every request with
     // "context_management: Extra inputs are not permitted" (HTTP 400), and the
-    // combo silently falls through to the next model. The model id gates this:
+    // request fails with a 400. The model id gates this:
     // a node fronting Kimi or GLM answers on its own ids and never matches, so
     // gateways that would choke on unknown beta flags are left untouched.
     const isClaudeModel = typeof model === "string" && /^claude-/.test(model);

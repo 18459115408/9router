@@ -52,6 +52,7 @@ source/*
 docs/*
 !docs/ARCHITECTURE.md
 !docs/UPSTREAM-SYNC.md
+!docs/FEATURE-REMOVAL-PLAN.md
 test/*
 open-sse/test/*
 RM.vn.md

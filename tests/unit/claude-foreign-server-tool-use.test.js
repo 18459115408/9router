@@ -1,4 +1,4 @@
-// A combo that mixes providers leaks foreign block shapes into the Claude history.
+// Switching providers mid-conversation leaks foreign block shapes into the Claude history.
 // Anthropic validates server_tool_use ids against ^srvtoolu_[a-zA-Z0-9_]+$ and 400s
 // the whole request when a provider (e.g. z.ai/glm) emits OpenAI-style call_ ids.
 import { describe, it, expect } from "vitest";

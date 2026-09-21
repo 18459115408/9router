@@ -191,8 +191,7 @@ describe("DefaultExecutor.buildHeaders() — anthropic-compatible stripping", ()
   // A node fronting Anthropic (rotating multi-account proxy, corporate gateway)
   // needs the same beta flags the `claude` provider sends. Without
   // context-management-2025-06-27 upstream answers HTTP 400
-  // "context_management: Extra inputs are not permitted" and the combo falls
-  // through to the next model without anyone noticing.
+  // "context_management: Extra inputs are not permitted".
   it("sends context-management beta for a Claude model on a custom host", () => {
     const executor = new DefaultExecutor("anthropic-compatible-custom");
     const headers = executor.buildHeaders(

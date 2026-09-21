@@ -402,7 +402,7 @@ async function peekFirstQoderFrame(reader, decoder) {
  *
  * NEW: Peek first frame to detect billing blocks (code 112/10605/pricingUrl).
  * If detected, return 403 response so chatCore marks connection unavailable
- * and triggers combo fallback instead of leaking error text into chat.
+ * and triggers account fallback instead of leaking error text into chat.
  */
 async function wrapQoderSSE(response, model) {
   if (!response.ok || !response.body) return response;

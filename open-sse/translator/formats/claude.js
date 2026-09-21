@@ -183,8 +183,8 @@ function buildThinkingPlaceholder(provider) {
 }
 
 // Anthropic validates server_tool_use ids against this pattern and rejects the
-// whole request with a 400 when one does not match. A combo that falls back to a
-// provider with its own built-in tools (z.ai/glm emits OpenAI-style `call_` ids for
+// whole request with a 400 when one does not match. Switching to a provider with
+// its own built-in tools (z.ai/glm emits OpenAI-style `call_` ids for
 // its analyze_image tool) leaves such blocks in the history, so every later Claude
 // turn carries a poisoned id.
 const CLAUDE_SERVER_TOOL_USE_ID = /^srvtoolu_[a-zA-Z0-9_]+$/;
@@ -257,8 +257,8 @@ export function normalizeClaudePassthrough(body, model = "") {
     body.messages = messages;
   }
 
-  // 5. Drop thinking blocks whose signature is not Claude's (combo mixes models,
-  // so foreign signatures leak into history and Anthropic rejects them).
+  // 5. Drop thinking blocks whose signature is not Claude's (switching models
+  // mid-conversation leaks foreign signatures into history and Anthropic rejects them).
   const thinkingEnabled = body.thinking?.type === "enabled";
   const droppedServerToolUseIds = new Set();
   if (Array.isArray(body.messages)) {

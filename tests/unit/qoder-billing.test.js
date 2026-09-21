@@ -3,7 +3,7 @@
  *
  * Ensures that billing blocks (code 112, 10605, pricingUrl) are detected
  * on the first SSE frame and returned as 403 responses so chatCore can
- * mark the connection unavailable and trigger combo failover.
+ * mark the connection unavailable and trigger account failover.
  */
 
 import { describe, it, expect } from "vitest";

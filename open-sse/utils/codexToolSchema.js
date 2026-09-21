@@ -12,8 +12,7 @@
 //   param: tools[0].parameters
 //
 // The request is deterministically malformed for this provider, so every
-// account fails identically and the combo pays a full failover before landing
-// somewhere that accepts it (#3922).
+// account fails identically and the request dies with a hard error (#3922).
 //
 // Scope guardrail (#3667): this is NOT a global schema sanitizer. Providers
 // that do support `\p{...}` keep the constraint untouched — the strip runs only

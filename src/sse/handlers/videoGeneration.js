@@ -81,7 +81,7 @@ async function resolveVideoProvider(parsedBody) {
   const modelStr = String(parsedBody.model);
   const modelInfo = await getModelInfo(modelStr);
   if (!modelInfo.provider) {
-    return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Combos are not supported for video generation") };
+    return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format") };
   }
   if (!getVideoConfig(modelInfo.provider)) {
     // Bare model ids (no explicit "provider/" prefix) fall back to the default

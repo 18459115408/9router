@@ -8,7 +8,7 @@
  * 9router anchors the 1h cache breakpoint on the LAST tool of the array with
  * no guard. Clients that speak MCP (Claude Code) put deferred tools at the
  * tail, so the anchor lands exactly on a tool that cannot be cached and the
- * request 400s before combo fallback can try the next hop.
+ * request 400s outright.
  *
  * The fix anchors on the last tool that is NOT deferred, so prompt caching is
  * kept for the tools that can use it instead of being dropped wholesale.
