@@ -400,7 +400,6 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 | 🔄 **格式转换** | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex | 兼容任何 CLI 工具 |
 | 👥 **多账户支持** | 每个提供商支持多个账户 | 负载均衡 + 冗余备份 |
 | 🔄 **自动 Token 刷新** | OAuth token 自动刷新 | 无需手动重新登录 |
-| 🎨 **自定义组合** | 创建无限模型组合 | 自定义适合你的切换策略 |
 | 📝 **请求日志** | 调试模式下的完整请求/响应日志 | 轻松排查问题 |
 | 💾 **云同步** | 跨设备同步配置 | 处处相同设置 |
 | 📊 **使用分析** | 追踪 tokens、成本、趋势 | 优化开支 |
@@ -424,18 +423,9 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 使用 RTK：    28K tokens 发送给 LLM   (节省 40% · 相同上下文 · 相同答案)
 ```
 
-### 🎯 智能三层切换
+### 🎯 多账号故障转移
 
-创建具有自动切换功能的组合：
-
-```
-组合："my-coding-stack"
-  1. cc/claude-opus-4-6        （你的订阅）
-  2. glm/glm-4.7               （低价备份，$0.6/1M）
-  3. if/kimi-k2-thinking       （免费备选）
-
-→ 配额用完或出错时自动切换
-```
+9Router 会在你为同一提供商连接的多个账号之间自动轮换：某个账号配额用尽或出错时，自动切换到下一个账号。
 
 ### 📊 实时配额追踪
 
@@ -463,13 +453,6 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 - 无需手动重新认证
 - 所有提供商的无缝体验
 
-### 🎨 自定义组合
-
-- 创建无限模型组合
-- 混合订阅、低价和免费等级
-- 为组合命名以便访问
-- 使用云同步跨设备共享组合
-
 ### 📝 请求日志
 
 - 启用调试模式获取完整请求/响应日志
@@ -479,7 +462,7 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 ### 💾 云同步
 
-- 跨设备同步提供商、组合和设置
+- 跨设备同步提供商和设置
 - 自动后台同步
 - 安全加密存储
 - 从任何地方访问你的设置
@@ -535,7 +518,7 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
  | | OpenCode Free | $0 |  varies* | 无需认证，自动获取模型（列表会变化） |
  | | Vertex AI | $300 额度 | 新 GCP 账户 | Gemini 3 Pro + DeepSeek + GLM-5（使用 Vertex AI Studio 端点消耗免费额度） |
 
-**💡 专业提示：** RTK + Kiro AI + OpenCode Free 组合 = **$0 成本 + 节省 20-40% tokens**！
+**💡 专业提示：** RTK + Kiro AI + OpenCode Free = **$0 成本 + 节省 20-40% tokens**！
 
 ---
 
@@ -582,10 +565,12 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 **解决方案：**
 ```
-组合："maximize-claude"
-  1. cc/claude-opus-4-7        （充分利用订阅）
-  2. glm/glm-5.1               （配额用完时的低价备份）
-  3. kr/claude-sonnet-4.5      （免费紧急备选）
+连接以下账号：
+  1. cc/claude-opus-4-7   （充分利用订阅）
+  2. glm/glm-5.1          （配额用完时的低价备份）
+  3. kr/claude-sonnet-4.5 （免费紧急备选）
+
+→ 某个账号配额用尽时，9Router 自动轮换到下一个账号
 
 月成本：$20（订阅）+ ~$5（备份）= $25 总计
 对比：$20 + 遇到限制 = 沮丧
@@ -597,10 +582,12 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 **解决方案：**
 ```
-组合："free-forever"
-  1. kr/claude-sonnet-4.5      （通过 Kiro 免费使用 Claude 4.5，约 50 积分/月）
-  2. kr/glm-5                  （通过 Kiro 免费使用 GLM-5）
-  3. oc/<auto>                 （OpenCode Free，无需认证）
+连接以下账号：
+  1. kr/claude-sonnet-4.5 （通过 Kiro 免费使用 Claude 4.5，约 50 积分/月）
+  2. kr/glm-5             （通过 Kiro 免费使用 GLM-5）
+  3. oc/<auto>            （OpenCode Free，无需认证）
+
+→ 某个账号配额用尽时，9Router 自动轮换到下一个账号
 
 月成本：$0
 质量：生产级模型 + RTK 节省 20-40% tokens
@@ -612,14 +599,14 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 **解决方案：**
 ```
-组合："always-on"
-  1. cc/claude-opus-4-7        （最佳质量）
-  2. cx/gpt-5.5                （第二个订阅）
-  3. glm/glm-5.1               （低价，每日重置）
-  4. minimax/MiniMax-M2.7      （最便宜，5小时重置）
-  5. kr/claude-sonnet-4.5      （通过 Kiro 免费使用，约 50 积分/月）
+连接以下账号：
+  1. cc/claude-opus-4-7   （最佳质量）
+  2. cx/gpt-5.5           （第二个订阅）
+  3. glm/glm-5.1          （低价，每日重置）
+  4. minimax/MiniMax-M2.7 （最便宜，5小时重置）
+  5. kr/claude-sonnet-4.5 （通过 Kiro 免费使用，约 50 积分/月）
 
-结果：5 层切换 = 零停机时间
+结果：5 个账号自动轮换 = 零停机时间
 月成本：$20-200（订阅）+ $10-20（备份）
 ```
 
@@ -629,10 +616,12 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 **解决方案：**
 ```
-组合："openclaw-free"
-  1. kr/claude-sonnet-4.5      （Claude 4.5 免费）
-  2. kr/glm-5                  （GLM-5 免费）
-  3. kr/MiniMax-M2.5           （MiniMax 免费）
+连接以下账号：
+  1. kr/claude-sonnet-4.5 （Claude 4.5 免费）
+  2. kr/glm-5             （GLM-5 免费）
+  3. kr/MiniMax-M2.5      （MiniMax 免费）
+
+→ 某个账号配额用尽时，9Router 自动轮换到下一个账号
 
 月成本：$0
 访问方式：WhatsApp、Telegram、Slack、Discord、iMessage、Signal...
@@ -695,7 +684,7 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
 
 **免费优先策略：**
 
-1. **从 100% 免费组合开始：**
+1. **从 100% 免费提供商开始：**
    ```
    1. kr/glm-5 (通过 Kiro 免费使用 GLM-5，约 50 积分/月)
    2. OpenCode Free 模型（无认证，自动获取）
@@ -895,43 +884,6 @@ Vertex 合作伙伴（通过 Vertex 提供 Anthropic / DeepSeek / GLM / Qwen）�
 </details>
 
 <details>
-<summary><b>🎨 创建组合</b></summary>
-
-### 示例 1：充分利用订阅 → 低价备份
-
-```
-控制面板 → 组合 → 创建新组合
-
-名称：premium-coding
-模型：
-  1. cc/claude-opus-4-7 (订阅主用)
-  2. glm/glm-5.1 (低价备份，$0.6/1M)
-  3. minimax/MiniMax-M2.7 (最便宜的备选，$0.20/1M)
-
-在 CLI 中使用：premium-coding
-
-月度成本示例（100M tokens）：
-  80M 通过 Claude（订阅）：$0 额外费用
-  15M 通过 GLM：$9
-  5M 通过 MiniMax：$1
-  总计：$10 + 你的订阅费用
-```
-
-### 示例 2：仅免费（零成本）
-
-```
-名称：free-combo
-模型：
-  1. kr/claude-sonnet-4.5 (通过 Kiro 免费使用 Claude 4.5，约 50 积分/月)
-  2. kr/glm-5 (通过 Kiro 免费使用 GLM-5)
-  3. vertex/gemini-3.1-pro-preview ($300 免费额度)
-
-成本：通过 RTK 永久 $0（+ 节省 20-40% tokens）！
-```
-
-</details>
-
-<details>
 <summary><b>🔧 CLI 集成</b></summary>
 
 ### Cursor IDE
@@ -942,8 +894,6 @@ Vertex 合作伙伴（通过 Vertex 提供 Anthropic / DeepSeek / GLM / Qwen）�
   OpenAI API Key：[来自 9router 控制面板]
   Model：cc/claude-opus-4-7
 ```
-
-或使用组合：`premium-coding`
 
 ### Claude Code
 
@@ -1118,7 +1068,7 @@ docker stop 9router && docker rm 9router
 
 ### 运行时文件和存储
 
-- 主应用状态：`${DATA_DIR}/db.json`（提供商、组合、别名、密钥、设置），由 `src/lib/localDb.js` 管理。
+- 主应用状态：`${DATA_DIR}/db.json`（提供商、别名、密钥、设置），由 `src/lib/localDb.js` 管理。
 - 使用历史和日志：`${DATA_DIR}/usage.json` 和 `${DATA_DIR}/log.txt`，由 `src/lib/usageDb.js` 管理。
 - 可选的请求/翻译器日志：`ENABLE_REQUEST_LOGS=true` 时位于 `<repo>/logs/...`。
 - `${DATA_DIR}` 和 `~/.9router` 在 Docker 容器中解析到同一位置 — 符号链接 `/root/.9router -> /app/data` 在构建时创建。
@@ -1198,11 +1148,11 @@ docker stop 9router && docker rm 9router
 
 **"语言模型未提供消息"**
 - 提供商配额耗尽 → 检查控制面板配额追踪器
-- 解决方案：使用组合切换或切换到更便宜的等级
+- 解决方案：切换到同一提供商下的其他账号,或改用更便宜的等级
 
 **速率限制**
 - 订阅配额用完 → 切换到 GLM/MiniMax
-- 添加组合：`cc/claude-opus-4-7 → glm/glm-5.1 → kr/claude-sonnet-4.5`
+- 添加其他账号：`glm/glm-5.1` 或 `kr/claude-sonnet-4.5`
 
 **OAuth token 已过期**
 - 9Router 自动刷新
@@ -1261,7 +1211,7 @@ Content-Type: application/json
 GET http://localhost:20128/v1/models
 Authorization: Bearer your-api-key
 
-→ 以 OpenAI 格式返回所有模型和组合
+→ 以 OpenAI 格式返回所有模型
 ```
 
 ## 📧 支持

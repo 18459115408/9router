@@ -15,7 +15,7 @@ curl $NINEROUTER_URL/v1/models/web | jq '.data[] | select(.kind=="webSearch") | 
 curl "$NINEROUTER_URL/v1/models/info?id=tavily/search"
 ```
 
-IDs end in `/search` (e.g. `tavily/search`). Combos (`owned_by:"combo"`) chain providers with auto-fallback.
+IDs end in `/search` (e.g. `tavily/search`).
 
 ## Endpoint
 
@@ -44,7 +44,7 @@ JS:
 const r = await fetch(`${process.env.NINEROUTER_URL}/v1/search`, {
   method: "POST",
   headers: { "Authorization": `Bearer ${process.env.NINEROUTER_KEY}`, "Content-Type": "application/json" },
-  body: JSON.stringify({ model: "search-combo", query: "latest LLM benchmarks", max_results: 10 }),
+  body: JSON.stringify({ model: "tavily/search", query: "latest LLM benchmarks", max_results: 10 }),
 });
 console.log(await r.json());
 ```

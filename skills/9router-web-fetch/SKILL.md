@@ -15,7 +15,7 @@ curl $NINEROUTER_URL/v1/models/web | jq '.data[] | select(.kind=="webFetch") | .
 curl "$NINEROUTER_URL/v1/models/info?id=firecrawl/fetch"
 ```
 
-IDs end in `/fetch` (e.g. `firecrawl/fetch`, `jina/fetch`). `fetch-combo` chains providers with auto-fallback.
+IDs end in `/fetch` (e.g. `firecrawl/fetch`, `jina/fetch`).
 
 ## Endpoint
 
@@ -80,7 +80,7 @@ JS:
 const r = await fetch(`${process.env.NINEROUTER_URL}/v1/web/fetch`, {
   method: "POST",
   headers: { "Authorization": `Bearer ${process.env.NINEROUTER_KEY}`, "Content-Type": "application/json" },
-  body: JSON.stringify({ model: "fetch-combo", url: "https://example.com", format: "markdown", max_characters: 5000 }),
+  body: JSON.stringify({ model: "jina/fetch", url: "https://example.com", format: "markdown", max_characters: 5000 }),
 });
 const { data } = await r.json();
 console.log(data.title, data.content.length);

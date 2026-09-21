@@ -522,7 +522,6 @@ a third party under a provider named "Self-hosted".
 | 🔄 **Format Translation**                                                         | OpenAI ↔ Claude ↔ Gemini ↔ Cursor ↔ Kiro ↔ Vertex                                        | Works with any CLI tool                           |
 | 👥 **Multi-Account Support**                                                      | Multiple accounts per provider                                                           | Load balancing + redundancy                       |
 | 🔄 **Auto Token Refresh**                                                         | OAuth tokens refresh automatically                                                       | No manual re-login needed                         |
-| 🎨 **Custom Combos**                                                              | Create unlimited model combinations                                                      | Tailor fallback to your needs                     |
 | 📝 **Request Logging**                                                            | Debug mode with full request/response logs                                               | Troubleshoot issues easily                        |
 | 💾 **Cloud Sync**                                                                 | Sync config across devices                                                               | Same setup everywhere                             |
 | 📊 **Usage Analytics**                                                            | Track tokens, cost, trends over time                                                     | Optimize spending                                 |
@@ -592,18 +591,9 @@ With Ponytail:    shortest working diff, no unrequested abstractions, fewer toke
 
 Never trades away: input validation, error handling that prevents data loss, security, accessibility, or anything explicitly requested. Enable in Dashboard → Endpoint → Ponytail. Stacks with Caveman (output terseness) and RTK (input compression).
 
-### 🎯 Smart 3-Tier Fallback
+### 🎯 Multi-Account Fallback
 
-Create combos with automatic fallback:
-
-```
-Combo: "my-coding-stack"
-  1. cc/claude-opus-4-6        (your subscription)
-  2. glm/glm-4.7               (cheap backup, $0.6/1M)
-  3. if/kimi-k2-thinking       (free fallback)
-
-→ Auto switches when quota runs out or errors occur
-```
+9Router rotates between the accounts you've connected for a provider: when one account hits its quota limit or errors, the next account is used automatically.
 
 ### 📊 Real-Time Quota Tracking
 
@@ -632,13 +622,6 @@ Seamless translation between formats:
 - No manual re-authentication needed
 - Seamless experience across all providers
 
-### 🎨 Custom Combos
-
-- Create unlimited model combinations
-- Mix subscription, cheap, and free tiers
-- Name your combos for easy access
-- Share combos across devices with Cloud Sync
-
 ### 📝 Request Logging
 
 - Enable debug mode for full request/response logs
@@ -648,7 +631,7 @@ Seamless translation between formats:
 
 ### 💾 Cloud Sync
 
-- Sync providers, combos, and settings across devices
+- Sync providers and settings across devices
 - Automatic background sync
 - Secure encrypted storage
 - Access your setup from anywhere
@@ -706,7 +689,7 @@ Seamless translation between formats:
  |                     | OpenCode Free         | $0           | Varies*          | No auth, auto-fetch models (list changes over time) |
  |                     | Vertex AI             | $300 credits | New GCP accounts | Gemini 3 Pro + DeepSeek + GLM-5 (use Vertex AI Studio endpoint for free credits) |
 
-**💡 Pro Tip:** RTK + Kiro AI + OpenCode Free combo = **$0 cost + 20-40% token savings**!
+**💡 Pro Tip:** RTK + Kiro AI + OpenCode Free = **$0 cost + 20-40% token savings**!
 
 ---
 
@@ -756,10 +739,12 @@ Reality Check:
 **Solution:**
 
 ```
-Combo: "maximize-claude"
-  1. cc/claude-opus-4-7        (use subscription fully)
-  2. glm/glm-5.1               (cheap backup when quota out)
-  3. kr/claude-sonnet-4.5      (free emergency fallback)
+Connect these accounts:
+  1. cc/claude-opus-4-7   (use subscription fully)
+  2. glm/glm-5.1          (cheap backup when quota out)
+  3. kr/claude-sonnet-4.5 (free emergency fallback)
+
+→ 9Router rotates to the next account when one hits its quota limit
 
 Monthly cost: $20 (subscription) + ~$5 (backup) = $25 total
 vs. $20 + hitting limits = frustration
@@ -772,10 +757,12 @@ vs. $20 + hitting limits = frustration
 **Solution:**
 
 ```
-Combo: "free-forever"
-  1. kr/claude-sonnet-4.5      (Claude 4.5 free via Kiro, ~50 credits/mo)
-  2. kr/glm-5                  (GLM-5 free via Kiro)
-  3. oc/<auto>                 (OpenCode Free, no auth)
+Connect these accounts:
+  1. kr/claude-sonnet-4.5 (Claude 4.5 free via Kiro, ~50 credits/mo)
+  2. kr/glm-5             (GLM-5 free via Kiro)
+  3. oc/<auto>            (OpenCode Free, no auth)
+
+→ 9Router rotates to the next account when one hits its quota limit
 
 Monthly cost: $0
 Quality: Production-ready models + RTK saves 20-40% tokens
@@ -788,14 +775,14 @@ Quality: Production-ready models + RTK saves 20-40% tokens
 **Solution:**
 
 ```
-Combo: "always-on"
-  1. cc/claude-opus-4-7        (best quality)
-  2. cx/gpt-5.5                (second subscription)
-  3. glm/glm-5.1               (cheap, resets daily)
-  4. minimax/MiniMax-M2.7      (cheapest, 5h reset)
-  5. kr/claude-sonnet-4.5      (free via Kiro, ~50 credits/mo)
+Connect these accounts:
+  1. cc/claude-opus-4-7   (best quality)
+  2. cx/gpt-5.5           (second subscription)
+  3. glm/glm-5.1          (cheap, resets daily)
+  4. minimax/MiniMax-M2.7 (cheapest, 5h reset)
+  5. kr/claude-sonnet-4.5 (free via Kiro, ~50 credits/mo)
 
-Result: 5 layers of fallback = zero downtime
+Result: 5 accounts rotating = zero downtime
 Monthly cost: $20-200 (subscriptions) + $10-20 (backup)
 ```
 
@@ -806,10 +793,12 @@ Monthly cost: $20-200 (subscriptions) + $10-20 (backup)
 **Solution:**
 
 ```
-Combo: "openclaw-free"
-  1. kr/claude-sonnet-4.5      (Claude 4.5 free)
-  2. kr/glm-5                  (GLM-5 free)
-  3. kr/MiniMax-M2.5           (MiniMax free)
+Connect these accounts:
+  1. kr/claude-sonnet-4.5 (Claude 4.5 free)
+  2. kr/glm-5             (GLM-5 free)
+  3. kr/MiniMax-M2.5      (MiniMax free)
+
+→ 9Router rotates to the next account when one hits its quota limit
 
 Monthly cost: $0
 Access via: WhatsApp, Telegram, Slack, Discord, iMessage, Signal...
@@ -876,7 +865,7 @@ These are free services offered by those respective companies:
 
 **Free-First Strategy:**
 
-1. **Start with 100% free combo:**
+1. **Start with 100% free providers:**
 
    ```
    1. kr/glm-5 (GLM-5 free via Kiro, ~50 credits/mo)
@@ -1082,43 +1071,6 @@ Vertex Partner (Anthropic / DeepSeek / GLM / Qwen via Vertex):
 </details>
 
 <details>
-<summary><b>🎨 Create Combos</b></summary>
-
-### Example 1: Maximize Subscription → Cheap Backup
-
-```
-Dashboard → Combos → Create New
-
-Name: premium-coding
-Models:
-  1. cc/claude-opus-4-7 (Subscription primary)
-  2. glm/glm-5.1 (Cheap backup, $0.6/1M)
-  3. minimax/MiniMax-M2.7 (Cheapest fallback, $0.20/1M)
-
-Use in CLI: premium-coding
-
-Monthly cost example (100M tokens):
-  80M via Claude (subscription): $0 extra
-  15M via GLM: $9
-  5M via MiniMax: $1
-  Total: $10 + your subscription
-```
-
-### Example 2: Free-Only (Zero Cost)
-
-```
-Name: free-combo
-Models:
-  1. kr/claude-sonnet-4.5 (Claude 4.5 free via Kiro, ~50 credits/mo)
-  2. kr/glm-5 (GLM-5 free via Kiro)
-  3. vertex/gemini-3.1-pro-preview ($300 free credits)
-
-Cost: $0 forever (+ 20-40% token savings via RTK)!
-```
-
-</details>
-
-<details>
 <summary><b>🔧 CLI Integration</b></summary>
 
 ### Cursor IDE
@@ -1129,8 +1081,6 @@ Settings → Models → Advanced:
   OpenAI API Key: [from 9router dashboard]
   Model: cc/claude-opus-4-7
 ```
-
-Or use combo: `premium-coding`
 
 ### Claude Code
 
@@ -1313,7 +1263,7 @@ Notes:
 
 ### Runtime Files and Storage
 
-- Main app state: `${DATA_DIR}/db/data.sqlite` (SQLite — providers, combos, aliases, keys, settings, usage history)
+- Main app state: `${DATA_DIR}/db/data.sqlite` (SQLite — providers, aliases, keys, settings, usage history)
 - Auto backups: `${DATA_DIR}/db/backups/`
 - Optional request/translator logs: `<repo>/logs/...` when `ENABLE_REQUEST_LOGS=true`
 - Both `${DATA_DIR}` and `~/.9router` resolve to the same location in a Docker container — the symlink `/root/.9router -> /app/data` is created at build time.
@@ -1404,12 +1354,12 @@ Notes:
 **"Language model did not provide messages"**
 
 - Provider quota exhausted → Check dashboard quota tracker
-- Solution: Use combo fallback or switch to cheaper tier
+- Solution: Switch to another connected account or a cheaper tier
 
 **Rate limiting**
 
 - Subscription quota out → Fallback to GLM/MiniMax
-- Add combo: `cc/claude-opus-4-7 → glm/glm-5.1 → kr/claude-sonnet-4.5`
+- Add another account: `glm/glm-5.1` or `kr/claude-sonnet-4.5`
 
 **OAuth token expired**
 
@@ -1473,7 +1423,7 @@ Content-Type: application/json
 GET http://localhost:20128/v1/models
 Authorization: Bearer your-api-key
 
-→ Returns all models + combos in OpenAI format
+→ Returns all models in OpenAI format
 ```
 
 ## 📧 Support

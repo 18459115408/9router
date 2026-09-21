@@ -1,6 +1,6 @@
 ---
 name: 9router-chat
-description: Chat / code generation via 9Router using OpenAI /v1/chat/completions or Anthropic /v1/messages format with streaming + auto-fallback combos. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through 9Router.
+description: Chat / code generation via 9Router using OpenAI /v1/chat/completions or Anthropic /v1/messages format with streaming and automatic account failover. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through 9Router.
 ---
 
 # 9Router — Chat
@@ -20,7 +20,7 @@ curl $NINEROUTER_URL/v1/models | jq '.data[].id'
 curl "$NINEROUTER_URL/v1/models/info?id=openai/gpt-4o"
 ```
 
-Combos (e.g. `vip`, `mycodex`) auto-fallback through multiple providers.
+When one account hits its quota limit, 9Router rotates to your other connected accounts for the same provider.
 
 ## OpenAI format
 

@@ -30,7 +30,7 @@ curl $NINEROUTER_URL/v1/models/stt              # speech-to-text
 curl $NINEROUTER_URL/v1/models/image-to-text    # vision
 ```
 
-Use `data[].id` as `model` field in requests. Combos appear with `owned_by:"combo"`.
+Use `data[].id` as `model` field in requests.
 
 Response shape:
 ```json

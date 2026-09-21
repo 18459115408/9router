@@ -11,10 +11,9 @@ Core capabilities:
 
 - OpenAI-compatible API surface for CLI/tools
 - Request/response translation across provider formats
-- Model combo fallback (multi-model sequence)
 - Account-level fallback (multi-account per provider)
 - OAuth + API-key provider connection management
-- Local persistence for providers, keys, aliases, combos, settings, pricing
+- Local persistence for providers, keys, aliases, settings, pricing
 - Usage/cost tracking and request logging
 - Optional cloud sync for multi-device/state sync
 
@@ -114,7 +113,7 @@ Management domains:
 - Providers/connections: `src/app/api/providers*`
 - Provider nodes: `src/app/api/provider-nodes*`
 - OAuth: `src/app/api/oauth/*`
-- Keys/aliases/combos/pricing: `src/app/api/keys*`, `src/app/api/models/alias`, `src/app/api/combos*`, `src/app/api/pricing`
+- Keys/aliases/pricing: `src/app/api/keys*`, `src/app/api/models/alias`, `src/app/api/pricing`
 - Usage: `src/app/api/usage/*`
 - Sync/cloud: `src/app/api/sync/*`, `src/app/api/cloud/*`
 - CLI tooling helpers: `src/app/api/cli-tools/*`
@@ -139,7 +138,7 @@ Primary state DB:
 
 - `src/lib/localDb.js`
 - file: `${DATA_DIR}/db.json` (or `~/.9router/db.json` when `DATA_DIR` is unset)
-- entities: providerConnections, providerNodes, modelAliases, combos, apiKeys, settings, pricing
+- entities: providerConnections, providerNodes, modelAliases, apiKeys, settings, pricing
 
 Usage DB:
 
@@ -178,11 +177,7 @@ sequenceDiagram
 
     Client->>Route: POST /v1/chat/completions
     Route->>Chat: handleChat(request)
-    Chat->>Model: parse/resolve model or combo
-
-    alt Combo model
-        Chat->>Chat: iterate combo models (handleComboChat)
-    end
+    Chat->>Model: parse/resolve model
 
     Chat->>Auth: getProviderCredentials(provider)
     Auth-->>Chat: active account + tokens/api key
@@ -207,19 +202,13 @@ sequenceDiagram
     Stream->>Usage: extract usage + persist history/log
 ```
 
-## Combo + Account Fallback Flow
+## Account Fallback Flow
 
 ```mermaid
 flowchart TD
-    A[Incoming model string] --> B{Is combo name?}
-    B -- Yes --> C[Load combo models sequence]
-    B -- No --> D[Single model path]
+    A[Incoming model string] --> B[Resolve provider/model]
 
-    C --> E[Try model N]
-    E --> F[Resolve provider/model]
-    D --> F
-
-    F --> G[Select account credentials]
+    B --> G[Select account credentials]
     G --> H{Credentials available?}
     H -- No --> I[Return provider unavailable]
     H -- Yes --> J[Execute request]
@@ -232,9 +221,7 @@ flowchart TD
     M -- Yes --> O[Mark account unavailable cooldown]
     O --> P{Another account for provider?}
     P -- Yes --> G
-    P -- No --> Q{In combo with next model?}
-    Q -- Yes --> E
-    Q -- No --> R[Return all unavailable]
+    P -- No --> R[Return all unavailable]
 ```
 
 Fallback decisions are driven by `open-sse/services/accountFallback.js` using status codes and error-message heuristics.
@@ -285,7 +272,7 @@ sequenceDiagram
     UI->>Sync: POST action=enable
     Sync->>DB: set cloudEnabled=true
     Sync->>DB: ensure API key exists
-    Sync->>Cloud: POST /sync/{machineId} (providers/aliases/combos/keys)
+    Sync->>Cloud: POST /sync/{machineId} (providers/aliases/keys)
     Cloud-->>Sync: sync result
     Sync->>Cloud: GET /{machineId}/v1/verify
     Sync-->>UI: enabled + verification status
@@ -349,12 +336,6 @@ erDiagram
     MODEL_ALIAS {
       string alias
       string targetModel
-    }
-
-    COMBO {
-      string id
-      string name
-      string[] models
     }
 
     API_KEY {
@@ -423,7 +404,6 @@ flowchart LR
 - `src/app/api/oauth/*`: OAuth/device-code flows
 - `src/app/api/keys*`: local API key lifecycle
 - `src/app/api/models/alias`: alias management
-- `src/app/api/combos*`: fallback combo management
 - `src/app/api/pricing`: pricing overrides for cost calculation
 - `src/app/api/usage/*`: usage and logs APIs
 - `src/app/api/sync/*` + `src/app/api/cloud/*`: cloud sync and cloud-facing helpers
@@ -431,7 +411,7 @@ flowchart LR
 
 ### Routing and Execution Core
 
-- `src/sse/handlers/chat.js`: request parse, combo handling, account selection loop
+- `src/sse/handlers/chat.js`: request parse, account selection loop
 - `open-sse/handlers/chatCore.js`: translation, executor dispatch, retry/refresh handling, stream setup
 - `open-sse/executors/*`: provider-specific network and format behavior
 
@@ -487,7 +467,6 @@ Translations are selected dynamically based on source payload shape and provider
 
 - provider account cooldown on transient/rate/auth errors
 - account fallback before failing request
-- combo model fallback when current model/provider path is exhausted
 
 ## 2) Token Expiry
 

@@ -72,5 +72,5 @@ Submits, polls with progress, downloads to `video.mp4.part`, atomically renames 
 
 - Jobs are **account-bound** upstream: poll with the same connection that created the job (`x-connection-id` header, value from the create response's `x-9router-connection-id`).
 - Creation POSTs are **never auto-retried** (a retry could create and bill two videos). Only a 401→token-refresh→single-retry is performed, which upstream rejects before job creation.
-- Video models are tagged `kind: "video"` and are excluded from chat model lists and chat fallback combos.
+- Video models are tagged `kind: "video"` and are excluded from chat model lists.
 - Grok Build **subscription OAuth** tokens are sent to the same `api.x.ai/v1/videos` endpoints as API keys; whether a given subscription tier includes video-generation quota is controlled by xAI and is not verified by 9Router — a `403`/`permission_denied` from upstream means the connected account has no video access.
