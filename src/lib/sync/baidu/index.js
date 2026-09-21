@@ -15,6 +15,18 @@ let timerHandle = null;
 let tickRunning = false;
 let intervalOverrideMs = null;
 
+// Next is free to evaluate this module more than once inside a single server
+// (instrumentation and a route handler do not share a module instance), so the
+// running flag is mirrored on the process global — same trick as
+// lib/consoleLogBuffer.js. Without it `isBaiduSyncStarted()` reports false to a
+// route handler while the scheduler is in fact running, and custom-server.js can
+// start a second timer alongside instrumentation's, double-ticking the sync.
+const STARTED_FLAG = "__9routerBaiduSyncStarted";
+
+function isStartedGlobally() {
+  return globalThis[STARTED_FLAG] === true;
+}
+
 function isSyncDisabledByEnv() {
   const v = String(process.env.BAIDU_SYNC ?? "").trim().toLowerCase();
   return v === "off" || v === "false" || v === "0" || v === "no";
@@ -116,7 +128,7 @@ async function safeTick() {
  * @returns {boolean} true if started by this call
  */
 export function startBaiduSync(opts = {}) {
-  if (started) return false;
+  if (started || isStartedGlobally()) return false;
   if (isSyncDisabledByEnv()) return false;
   if (isNonServerRuntime()) return false;
   if (!isConfigured()) {
@@ -126,6 +138,7 @@ export function startBaiduSync(opts = {}) {
 
   if (Number.isFinite(opts.intervalMs) && opts.intervalMs > 0) intervalOverrideMs = opts.intervalMs;
   started = true;
+  globalThis[STARTED_FLAG] = true;
   const initial = setTimeout(safeTick, INITIAL_DELAY_MS);
   if (initial.unref) initial.unref();
   console.log(`[BAIDU_SYNC] scheduler started (every ${Math.round(readIntervalMs() / 60000)} min)`);
@@ -138,8 +151,9 @@ export function stopBaiduSync() {
     timerHandle = null;
   }
   started = false;
+  globalThis[STARTED_FLAG] = false;
 }
 
 export function isBaiduSyncStarted() {
-  return started;
+  return started || isStartedGlobally();
 }
