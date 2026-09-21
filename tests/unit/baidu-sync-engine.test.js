@@ -68,12 +68,9 @@ function mockClient({ remoteBlob = null, remoteMd5 = null, serverMtime = 0, uplo
     async downloadByDlink() {
       return remoteBlob;
     },
-    async uploadSingleStep(p, blob) {
+    async uploadChunked(p, blob) {
       uploads.push(Buffer.from(blob));
-      return { md5: md5hex(blob), size: blob.length, apiCalls: 2 };
-    },
-    async uploadChunked() {
-      throw new Error("chunked upload should not be used in tests");
+      return { md5: md5hex(blob), size: blob.length, apiCalls: 3 };
     },
     async createRemoteDir() {
       return true;

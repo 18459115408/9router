@@ -4,8 +4,11 @@
 // - OAuth: openapi.baidu.com/oauth/2.0/authorize|token. access_token lives 30 days;
 //   refresh_token is SINGLE-USE — every successful refresh returns a new one and the
 //   old stops working, so the new value is persisted before anything else happens.
-// - Upload ≤2GB: single-step `method=upload` (ondup=overwrite). Larger: precreate →
-//   superfile2 (4MB slices) → create (rtype=3 = overwrite on conflict).
+// - Upload: 3-step chunked only — precreate → superfile2 (4MB slices) → create
+//   (rtype=3 = overwrite on conflict). The single-step `method=upload` endpoint is
+//   retired: `pcs/file` answers 31064 "file is not authorized" and `xpan/file`
+//   answers 31832 "unsupported api" (verified against the live API 2026-09-21), so
+//   every upload goes through the chunked flow regardless of size.
 //   Upload host must come from `method=locateupload`, never hardcoded (we keep
 //   d.pcs.baidu.com only as a fallback when locateupload is unavailable).
 // - Download: filemetas(dlink=1) → GET dlink with `User-Agent: pan.baidu.com`.
@@ -25,7 +28,6 @@ const LOCATE_UPLOAD_APPID = 250528;
 const DOWNLOAD_USER_AGENT = "pan.baidu.com";
 const DEFAULT_UPLOAD_BASE = "https://d.pcs.baidu.com";
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB slices for non-VIP accounts
-const SINGLE_STEP_MAX = 2 * 1024 * 1024 * 1024; // 单步上传 cap per official docs
 const API_TIMEOUT_MS = 60 * 1000;
 const TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
 const REFRESH_LEAD_MS = 24 * 60 * 60 * 1000; // refresh 24h before the 30-day expiry
@@ -365,33 +367,8 @@ async function postMultipart(url, blob, filename, timeoutMs) {
   return json;
 }
 
-// Single-step upload: one request uploads data AND creates the file (≤2GB).
-// The doc does not pin the path component, so both known shapes are tried.
-export async function uploadSingleStep(remotePath, blob, accessToken) {
-  const base = await locateUploadBase(remotePath, accessToken, "0");
-  const qs = new URLSearchParams({
-    method: "upload",
-    access_token: accessToken,
-    path: remotePath,
-    ondup: "overwrite",
-  });
-  const shapes = [`${base}/rest/2.0/pcs/file?${qs}`, `${base}/rest/2.0/xpan/file?${qs}`];
-  let lastError = null;
-  for (let i = 0; i < shapes.length; i++) {
-    try {
-      const json = await postMultipart(shapes[i], blob, "data.sqlite.enc", TRANSFER_TIMEOUT_MS);
-      return { md5: normalizeMd5(json.md5), size: Number(json.size) || blob.length, apiCalls: i === 0 ? 1 : 2 };
-    } catch (e) {
-      lastError = e;
-      const endpointMismatch =
-        e instanceof BaiduPanError && (e.kind === "api" || e.kind === "notfound") && i === 0;
-      if (!endpointMismatch) throw e;
-    }
-  }
-  throw lastError;
-}
-
-// Chunked upload for blobs >2GB: precreate → superfile2 slices → create (rtype=3 overwrite).
+// Chunked upload: precreate → superfile2 slices → create (rtype=3 overwrite).
+// The only upload path — see the doc map at the top of this file.
 export async function uploadChunked(remotePath, blob, accessToken) {
   const sliceCount = Math.ceil(blob.length / CHUNK_SIZE);
   const md5s = [];

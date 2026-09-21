@@ -147,30 +147,47 @@ describe("baidu pan client", () => {
     expect(await panClient.statRemoteFile("/apps/9router/9router-sync/data.sqlite.enc", "tk")).toBeNull();
   });
 
-  it("single-step upload uses locateupload host, overwrite, and returns md5", async () => {
+  it("chunked upload runs precreate → superfile2 → create and returns the created md5", async () => {
     const calls = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url, init) => {
-        calls.push({ url: String(url), init });
-        if (String(url).includes("method=locateupload")) {
+        const u = String(url);
+        calls.push({ url: u, init });
+        if (u.includes("method=precreate")) {
+          return jsonResponse({ errno: 0, uploadid: "UPLOAD-ID", block_list: [0] });
+        }
+        if (u.includes("method=locateupload")) {
           return jsonResponse({ error_code: 0, servers: [{ server: "d.pcs.baidu.com" }] });
         }
-        return jsonResponse({ errno: 0, md5: "abcdef0123456789abcdef0123456789", size: 11 });
+        if (u.includes("superfile2")) {
+          return jsonResponse({ md5: "11111111111111111111111111111111" });
+        }
+        return jsonResponse({ errno: 0, md5: "22222222222222222222222222222222", size: 11 });
       })
     );
-    const out = await panClient.uploadSingleStep(
+
+    const out = await panClient.uploadChunked(
       "/apps/9router/9router-sync/data.sqlite.enc",
       Buffer.from("hello world"),
       "tk"
     );
-    expect(out.md5).toBe("abcdef0123456789abcdef0123456789");
-    expect(out.apiCalls).toBe(1);
-    const uploadUrl = calls[1].url;
-    expect(uploadUrl).toContain("method=upload");
-    expect(uploadUrl).toContain("ondup=overwrite");
-    expect(uploadUrl).toContain(`path=${encodeURIComponent("/apps/9router/9router-sync/data.sqlite.enc")}`);
-    expect(calls[1].init.body).toBeInstanceOf(FormData);
+
+    expect(out.md5).toBe("22222222222222222222222222222222");
+    expect(out.apiCalls).toBe(4); // precreate + locateupload + superfile2 + create
+
+    const encodedPath = encodeURIComponent("/apps/9router/9router-sync/data.sqlite.enc");
+    expect(calls[0].url).toContain("method=precreate");
+    expect(String(calls[0].init.body)).toContain("rtype=3");
+    expect(String(calls[0].init.body)).toContain(`path=${encodedPath}`);
+
+    const sliceUrl = calls.find((c) => c.url.includes("superfile2")).url;
+    expect(sliceUrl).toContain("type=tmpfile");
+    expect(sliceUrl).toContain("partseq=0");
+
+    const createCall = calls[calls.length - 1];
+    expect(createCall.url).toContain("method=create");
+    expect(String(createCall.init.body)).toContain("uploadid=UPLOAD-ID");
   });
 
   it("download sends the required User-Agent and appends the access_token", async () => {

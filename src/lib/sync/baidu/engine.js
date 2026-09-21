@@ -18,7 +18,6 @@ import * as panClient from "./panClient.js";
 
 const SYNC_DIR = path.join(DATA_DIR, "baidu-sync");
 const STATE_FILE = path.join(SYNC_DIR, "state.json");
-const SINGLE_STEP_MAX = 2 * 1024 * 1024 * 1024; // mirrors panClient's 单步上传 cap
 const SELF_SKEW_MS = 60 * 1000; // remote mtime tolerance so we never re-pull our own push
 const MAX_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const KEEP_APPLY_BACKUPS = 3;
@@ -258,14 +257,8 @@ async function pushIfNeeded(client, adapter, remotePath, accessToken, cfg, state
     const plain = fs.readFileSync(snapshotPath);
     const blob = encryptBuffer(plain, cfg.syncKey);
 
-    let upload;
-    if (blob.length > SINGLE_STEP_MAX) {
-      logInfo(`Snapshot ${blob.length} bytes exceeds 单步上传 cap — using chunked upload`);
-      upload = await client.uploadChunked(remotePath, blob, accessToken);
-    } else {
-      upload = await client.uploadSingleStep(remotePath, blob, accessToken);
-    }
-    result.calls += upload.apiCalls || 2;
+    const upload = await client.uploadChunked(remotePath, blob, accessToken);
+    result.calls += upload.apiCalls || 3;
     result.pushed = true;
     result.pushedBytes = blob.length;
 
@@ -373,4 +366,4 @@ export async function ensureRemoteDir(client, accessToken) {
   }
 }
 
-export { SINGLE_STEP_MAX, SYNC_DIR };
+export { SYNC_DIR };
