@@ -7,6 +7,40 @@ import { useTheme } from "@/shared/hooks/useTheme";
 import { cn } from "@/shared/utils/cn";
 import { APP_CONFIG } from "@/shared/constants/config";
 
+// Baidu sync status is read straight from the API route; kept at module scope so
+// the mount effect below has no component-scope dependency to re-trigger on.
+async function fetchSyncStatus() {
+  try {
+    const res = await fetch("/api/sync/baidu/status");
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? data : { error: data.error || "Failed to load sync status" };
+  } catch {
+    return { error: "Failed to load sync status" };
+  }
+}
+
+function formatSyncTs(ms) {
+  if (!ms) return "Never";
+  try {
+    return new Date(Number(ms)).toLocaleString();
+  } catch {
+    return "Never";
+  }
+}
+
+function formatSyncBytes(n) {
+  const bytes = Number(n);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 export default function ProfilePage() {
   const { theme, setTheme, isDark } = useTheme();
   const [shutdownOpen, setShutdownOpen] = useState(false);
@@ -20,6 +54,12 @@ export default function ProfilePage() {
   const [dbStatus, setDbStatus] = useState({ type: "", message: "" });
   const [dbAuth, setDbAuth] = useState({ open: false, mode: "", password: "" });
   const pendingImportRef = useRef(null);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncLoading, setSyncLoading] = useState(true);
+  const [syncTriggerLoading, setSyncTriggerLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState({ type: "", label: "", detail: "" });
+  const [syncCode, setSyncCode] = useState("");
+  const [syncCodeLoading, setSyncCodeLoading] = useState(false);
   const [oidcForm, setOidcForm] = useState({
     authMode: "password",
     oidcIssuerUrl: "",
@@ -692,6 +732,87 @@ export default function ProfilePage() {
     else if (mode === "import") await runImportDatabase(password);
   };
 
+  const loadSyncStatus = async () => {
+    setSyncLoading(true);
+    setSyncStatus(await fetchSyncStatus());
+    setSyncLoading(false);
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetchSyncStatus().then((data) => {
+      if (!active) return;
+      setSyncStatus(data);
+      setSyncLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSyncNow = async () => {
+    setSyncTriggerLoading(true);
+    setSyncResult({ type: "", label: "", detail: "" });
+    try {
+      const res = await fetch("/api/sync/baidu/trigger", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setSyncResult({ type: "error", label: "Sync request failed.", detail: data.error || "" });
+      } else if (data.status === "busy") {
+        setSyncResult({ type: "info", label: "A sync cycle is already running. Try again in a moment.", detail: "" });
+      } else if (data.status === "skipped") {
+        setSyncResult({ type: "error", label: "Sync was skipped.", detail: data.reason || "" });
+      } else if (data.status === "error") {
+        setSyncResult({ type: "error", label: "Sync failed.", detail: data.error || "" });
+      } else {
+        const parts = [data.pulled ? "pulled remote snapshot" : "remote unchanged"];
+        if (data.pushed) parts.push(`pushed ${formatSyncBytes(data.pushedBytes)}`);
+        parts.push(`${data.calls} API call${data.calls === 1 ? "" : "s"}`);
+        setSyncResult({ type: "success", label: "Sync finished.", detail: parts.join(", ") });
+      }
+      await loadSyncStatus();
+    } catch {
+      setSyncResult({ type: "error", label: "An error occurred.", detail: "" });
+    } finally {
+      setSyncTriggerLoading(false);
+    }
+  };
+
+  const handleSyncExchange = async () => {
+    const code = syncCode.trim();
+    if (!code) return;
+    setSyncCodeLoading(true);
+    setSyncResult({ type: "", label: "", detail: "" });
+    try {
+      const res = await fetch(`/api/sync/baidu/exchange?format=json&code=${encodeURIComponent(code)}`);
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        setSyncCode("");
+        setSyncResult({
+          type: "success",
+          label: "Authorization complete.",
+          detail: data.scope ? `scope: ${data.scope}` : "",
+        });
+      } else {
+        setSyncResult({ type: "error", label: "Authorization failed.", detail: data.error || "" });
+      }
+      await loadSyncStatus();
+    } catch {
+      setSyncResult({ type: "error", label: "An error occurred.", detail: "" });
+    } finally {
+      setSyncCodeLoading(false);
+    }
+  };
+
+  const syncToken = syncStatus?.token || {};
+  const syncAuthorized = syncToken.hasToken === true && syncToken.needsReauth !== true;
+  const syncAuthLabel = syncToken.needsReauth
+    ? "Needs re-authorization"
+    : syncToken.hasToken
+      ? "Authorized"
+      : "Not authorized";
+
   const observabilityEnabled = settings.enableObservability === true;
 
   const handleShutdown = async () => {
@@ -792,6 +913,183 @@ export default function ProfilePage() {
               </p>
             )}
           </div>
+        </Card>
+
+        {/* Baidu Netdisk Sync */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500 shrink-0">
+              <span className="material-symbols-outlined text-[20px]">cloud_sync</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold">Baidu Netdisk Sync</h3>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Encrypted snapshot of this database, synced to your Baidu Netdisk
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon="refresh"
+              onClick={loadSyncStatus}
+              disabled={syncLoading}
+              className="shrink-0"
+            >
+              Refresh
+            </Button>
+          </div>
+
+          {syncLoading ? (
+            <p className="text-xs sm:text-sm text-text-muted">Loading sync status…</p>
+          ) : syncStatus?.error ? (
+            <p className="text-xs sm:text-sm text-red-500">{syncStatus.error}</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {syncStatus?.configured === false && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">
+                    Sync is not configured. Set BAIDU_APP_KEY, BAIDU_SECRET_KEY and BAIDU_SYNC_KEY in .env, then restart.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 text-xs sm:text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-muted">Scheduler</span>
+                  <span className="text-text-main font-medium">
+                    {syncStatus?.schedulerStarted ? "Running" : "Stopped"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-muted">Sync interval, minutes</span>
+                  <span className="text-text-main font-medium">{syncStatus?.intervalMinutes ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-muted">Authorization</span>
+                  <span className={cn("font-medium", syncAuthorized ? "text-text-main" : "text-red-500")}>
+                    {syncAuthLabel}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-muted">Last sync</span>
+                  <span className="text-text-main font-medium">{formatSyncTs(syncStatus?.state?.lastSyncAt)}</span>
+                </div>
+                {syncToken.expiresAt ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-text-muted">Token refresh due</span>
+                    <span className="text-text-main font-medium">{formatSyncTs(syncToken.expiresAt)}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-text-muted shrink-0">Remote file</span>
+                  <code className="text-text-main font-mono text-[11px] break-all text-right">
+                    {syncStatus?.remotePath}
+                  </code>
+                </div>
+                {syncStatus?.excludeTables?.length ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-text-muted shrink-0">Excluded tables</span>
+                    <code className="text-text-main font-mono text-[11px] break-all text-right">
+                      {syncStatus.excludeTables.join(", ")}
+                    </code>
+                  </div>
+                ) : null}
+              </div>
+
+              {syncStatus?.state?.lastError && (
+                <p className="text-xs sm:text-sm text-red-500 break-words">
+                  <span className="font-medium">Last error: </span>
+                  {syncStatus.state.lastError}
+                </p>
+              )}
+
+              {syncStatus?.state?.throttleLevel > 0 && (
+                <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
+                  <span className="text-text-muted">Quota backoff level</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    {syncStatus.state.throttleLevel}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border/50">
+                <Button
+                  type="button"
+                  variant="primary"
+                  icon="sync"
+                  loading={syncTriggerLoading}
+                  onClick={handleSyncNow}
+                  disabled={syncStatus?.configured === false}
+                  className="w-full sm:w-auto"
+                >
+                  Sync Now
+                </Button>
+                <Button
+                  type="button"
+                  variant={syncAuthorized ? "outline" : "secondary"}
+                  icon="link"
+                  onClick={() =>
+                    window.open(syncStatus?.authorizeUrl || "/api/sync/baidu/authorize", "_blank", "noopener")
+                  }
+                  className="w-full sm:w-auto"
+                >
+                  {syncAuthorized ? "Re-authorize" : "Authorize"}
+                </Button>
+              </div>
+
+              {!syncAuthorized && (
+                <div className="flex flex-col gap-2 p-3 rounded-lg bg-bg border border-border-subtle">
+                  <p className="text-xs text-text-muted">
+                    After approving on the Baidu page it shows an authorization code.
+                  </p>
+                  <label className="text-xs font-medium">Authorization code</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      placeholder="269e7dff1cfb9889…"
+                      value={syncCode}
+                      onChange={(e) => setSyncCode(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && syncCode.trim() && !syncCodeLoading) handleSyncExchange();
+                      }}
+                      disabled={syncCodeLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      loading={syncCodeLoading}
+                      onClick={handleSyncExchange}
+                      disabled={!syncCode.trim()}
+                      className="w-full sm:w-auto shrink-0"
+                    >
+                      Complete Authorization
+                    </Button>
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    The code is valid for 10 minutes and can be used once.
+                  </p>
+                </div>
+              )}
+
+              {syncResult.label && (
+                <div
+                  className={cn(
+                    "text-xs sm:text-sm",
+                    syncResult.type === "error"
+                      ? "text-red-500"
+                      : syncResult.type === "success"
+                        ? "text-green-500"
+                        : "text-text-muted"
+                  )}
+                >
+                  <p>{syncResult.label}</p>
+                  {syncResult.detail && (
+                    <p className="mt-0.5 opacity-80 break-words">{syncResult.detail}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Security */}
