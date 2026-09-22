@@ -117,7 +117,9 @@ describe("baidu pan client", () => {
         calls.push({ url: String(url), init });
         return jsonResponse({
           errno: 0,
-          list: [
+          // filemetas answers with `info`, not `list` — mocking `list` here is what
+          // let a push-only sync ship: stat always returned null, so nothing pulled.
+          info: [
             {
               path: "/apps/9router/9router-sync/data.sqlite.enc",
               size: 123,
@@ -144,6 +146,11 @@ describe("baidu pan client", () => {
 
   it("returns null for a missing remote file (31066)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ errno: 31066 })));
+    expect(await panClient.statRemoteFile("/apps/9router/9router-sync/data.sqlite.enc", "tk")).toBeNull();
+  });
+
+  it("returns null when filemetas answers with an empty info array", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ errno: 0, info: [] })));
     expect(await panClient.statRemoteFile("/apps/9router/9router-sync/data.sqlite.enc", "tk")).toBeNull();
   });
 

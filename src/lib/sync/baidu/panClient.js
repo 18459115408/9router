@@ -301,8 +301,12 @@ export async function statRemoteFile(remotePath, accessToken) {
     if (e instanceof BaiduPanError && (e.kind === "notfound" || e.kind === "path")) return null;
     throw e;
   }
-  const list = Array.isArray(json?.list) ? json.list : [];
-  const entry = list.find((it) => it && it.path === remotePath && Number(it.isdir) === 0);
+  // filemetas answers with an `info` array — `list` is the shape of method=list.
+  // Reading the wrong key made every stat return null, which silently turned the
+  // sync into push-only: no instance ever saw a remote file, so no instance ever
+  // pulled. Verified against the live API 2026-09-21.
+  const raw = Array.isArray(json?.info) ? json.info : Array.isArray(json?.list) ? json.list : [];
+  const entry = raw.find((it) => it && it.path === remotePath && Number(it.isdir) === 0);
   if (!entry) return null;
   return {
     path: entry.path,
