@@ -56,7 +56,7 @@ export function getSyncConfig() {
     syncKey: process.env.BAIDU_SYNC_KEY || "",
     appName,
     remoteDir,
-    excludeTables: (process.env.BAIDU_SYNC_EXCLUDE_TABLES || "requestDetails")
+    excludeTables: (process.env.BAIDU_SYNC_EXCLUDE_TABLES || "requestDetails,apiKeys")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
