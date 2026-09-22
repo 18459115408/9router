@@ -15,6 +15,38 @@
 - 个人线只有一条：`master`。
 - 上游更新用 **merge** 合入，不要 rebase——删了上游功能，rebase 会反复冲突，merge 只在同一处代码被改动时才冲突一次。
 
+### 0.1 推送隔离与查更新（2026-09-22 配置）
+
+"upstream 只读"不靠自觉，靠三道**本机配置**强制执行：
+
+| 配置 | 命令 | 作用 |
+|---|---|---|
+| 断开 upstream 推送通道 | `git remote set-url --push upstream DISABLED` | fetch 不受影响；任何指向 upstream 的推送（含裸 `git push`、`git push upstream`）直接失败 |
+| pre-push 钩子 | `.git/hooks/pre-push`（脚本见下） | 连绕过 remote 名、直接写 URL 的推送也拦下并给中文提示 |
+| 跟踪改指自己仓库 | `git branch -u origin/master` | 裸 `git push`/`git pull` 默认走 origin；`git status` 的 ahead/behind 也改为与 origin 对比 |
+
+查上游新提交（只读，永远安全）：
+
+```bash
+git updates   # alias = git fetch upstream && git log --oneline master..upstream/master
+```
+
+`pre-push` 脚本（存为 `.git/hooks/pre-push` 后 `chmod +x`）：
+
+```sh
+#!/bin/sh
+# 个人项目模式：upstream（原仓库）只读，见 docs/UPSTREAM-SYNC.md §0.1。
+case "$1 $2" in
+  *upstream*|*decolua/9router*)
+    echo "已拦截：不能推送到原仓库（decolua/9router），改动请推 origin（你的仓库）。" >&2
+    exit 1
+    ;;
+esac
+exit 0
+```
+
+> ⚠️ 三道配置 + 钩子都是本机的：**hooks 不随 clone 带走，重新 clone 后按上表重配一遍。**
+
 ---
 
 ## 1. 日常同步（每周一次，或按需）
@@ -95,6 +127,7 @@ git log --oneline upstream/master..master  # 个人提交列表
 - 上游几乎每天都有合并和发版，修复集中在 provider 适配和流式处理。
 - 建议节奏：每周合并一次；听说上游修了你在用的 provider 的 bug 时立刻合。
 - 合并前可以先看上游最近提交：`git log --oneline upstream/master -20`。
+- 想知道**上游有而我没有**的新提交：`git updates`（见 §0.1；无输出 = 已跟平）。
 
 ---
 
