@@ -74,21 +74,52 @@ describe("openaiToClaudeRequest", () => {
 
     it("should not modify system prompt when response_format is missing", () => {
       const body = {
-        messages: [{ role: "user", content: "Hello" }]
+        messages: [
+          { role: "system", content: "Be terse." },
+          { role: "user", content: "Hello" }
+        ]
       };
 
       const result = openaiToClaudeRequest("claude-sonnet-4.5", body, false);
 
       // Should have system but without JSON instructions
       expect(result.system).toBeDefined();
-      
+
       const systemText = result.system
         .filter(s => s.type === "text")
         .map(s => s.text)
         .join("\n");
-      
+
       // Should NOT contain JSON-specific instructions
       expect(systemText).not.toContain("You must respond with valid JSON");
+      expect(systemText).toContain("Be terse.");
+    });
+
+    it("does not invent a system block when the client sent none (api-key account)", () => {
+      const body = {
+        messages: [{ role: "user", content: "Hello" }]
+      };
+
+      const result = openaiToClaudeRequest("claude-sonnet-4.5", body, false);
+      expect(result.system).toBeUndefined();
+    });
+
+    it("injects the Claude Code identity only for subscription-tunnel credentials", () => {
+      const body = {
+        messages: [
+          { role: "system", content: "Be terse." },
+          { role: "user", content: "hi" }
+        ]
+      };
+
+      const tunnel = openaiToClaudeRequest("claude-sonnet-4.5", body, false, { authType: "oauth" });
+      expect(tunnel.system).toHaveLength(2);
+      expect(tunnel.system[0].text).toContain("You are Claude Code");
+      expect(tunnel.system[1].text).toBe("Be terse.");
+
+      const metered = openaiToClaudeRequest("claude-sonnet-4.5", body, false, { authType: "apikey", apiKey: "sk-test" });
+      expect(metered.system).toHaveLength(1);
+      expect(metered.system[0].text).toBe("Be terse.");
     });
 
     it("should preserve existing system messages when adding response_format", () => {

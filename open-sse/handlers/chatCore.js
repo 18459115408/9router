@@ -11,6 +11,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.js";
 import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.js";
 import { handleBypassRequest } from "../utils/bypassHandler.js";
+import { isSubscriptionCredentials } from "../utils/accountType.js";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { getExecutor } from "../executors/index.js";
 import { supportsGrokCliReasoningEffort } from "../config/grokCli.js";
@@ -73,8 +74,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
 
-  // Check for bypass patterns (warmup, skip, cc naming)
-  const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming);
+  // Check for bypass patterns (warmup, skip, cc naming) — tunnel-only: the
+  // fabricated replies spare subscription quota on Claude Code meta-requests,
+  // and an API-key account (picked by the caller above) must always reach the
+  // real upstream instead of receiving a fake.
+  const bypassResponse = isSubscriptionCredentials(credentials)
+    ? handleBypassRequest(body, model, userAgent, ccFilterNaming)
+    : null;
   if (bypassResponse) return bypassResponse;
 
   const alias = PROVIDER_ID_TO_ALIAS[provider] || provider;

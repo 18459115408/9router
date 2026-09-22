@@ -7,13 +7,14 @@ import { parseDataUri } from "../concerns/image.js";
 import { extractTextContent } from "../formats/gemini.js";
 import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
+import { isSubscriptionCredentials } from "../../utils/accountType.js";
 
 // Empty prefix matches real Claude Code behavior (no tool name prefix).
 // Previously "proxy_" was used but this is a detectable fingerprint difference.
 const CLAUDE_OAUTH_TOOL_PREFIX = "";
 
 // Convert OpenAI request to Claude format
-export function openaiToClaudeRequest(model, body, stream) {
+export function openaiToClaudeRequest(model, body, stream, credentials = null) {
   // Tool name mapping for Claude OAuth (capitalizedName → originalName)
   const toolNameMap = new Map();
   // Cap max_tokens at the model's real output ceiling (e.g. Opus 4.8 = 128000),
@@ -129,16 +130,19 @@ Respond ONLY with the JSON object, no other text.`);
     }
   }
 
-  // System with Claude Code prompt and cache_control
+  // The "You are Claude Code" line is a subscription-tunnel disguise: OAuth /
+  // access-token accounts keep it (byte-identical upstream behavior), but an
+  // API-key account must receive the client's system text untouched — and
+  // never get an invented system block when the client sent none.
   const claudeCodePrompt = { type: CLAUDE_BLOCK.TEXT, text: CLAUDE_SYSTEM_PROMPT };
 
   if (systemParts.length > 0) {
     const systemText = systemParts.join("\n");
-    result.system = [
-      claudeCodePrompt,
-      { type: CLAUDE_BLOCK.TEXT, text: systemText, cache_control: { type: "ephemeral", ttl: "1h" } }
-    ];
-  } else {
+    const userSystemBlock = { type: CLAUDE_BLOCK.TEXT, text: systemText, cache_control: { type: "ephemeral", ttl: "1h" } };
+    result.system = isSubscriptionCredentials(credentials)
+      ? [claudeCodePrompt, userSystemBlock]
+      : [userSystemBlock];
+  } else if (isSubscriptionCredentials(credentials)) {
     result.system = [claudeCodePrompt];
   }
 

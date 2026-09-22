@@ -10,11 +10,37 @@ const T = (body) =>
   translateRequest(FORMATS.OPENAI, FORMATS.CLAUDE, "m", body, true, null, "anthropic-compatible-x");
 
 describe("OpenAI → Claude context mapping", () => {
-  // openai-to-claude.js:124-134 — always injects CLAUDE_SYSTEM_PROMPT ("You are Claude Code")
-  // KNOWN BUG: pollutes requests for non-official Claude-compatible providers
-  it.fails("does not inject Claude Code system prompt for compatible providers", () => {
+  // openai-to-claude.js — CLAUDE_SYSTEM_PROMPT ("You are Claude Code") is a
+  // subscription-tunnel disguise, gated by accountType.js: API-key / no-creds
+  // accounts must receive the client's system untouched.
+  it("does not inject Claude Code system prompt for api-key accounts", () => {
+    const out = T({
+      messages: [
+        { role: "system", content: "my own rules" },
+        { role: "user", content: "hi" },
+      ],
+    });
+    const text = (out.system || []).map((b) => b.text).join("\n");
+    expect(text, "Claude Code prompt injected").not.toContain("Claude Code");
+    expect(text).toContain("my own rules");
+    expect(out.system).toHaveLength(1);
+  });
+
+  it("does not invent a system block when the client sent none (api-key account)", () => {
     const out = T({ messages: [{ role: "user", content: "hi" }] });
-    expect(JSON.stringify(out.system), "Claude Code prompt injected").not.toContain("Claude Code");
+    expect(out.system).toBeUndefined();
+  });
+
+  it("keeps the Claude Code identity line for oauth (subscription tunnel) accounts", () => {
+    const out = translateRequest(
+      FORMATS.OPENAI, FORMATS.CLAUDE, "m",
+      { messages: [{ role: "system", content: "my own rules" }, { role: "user", content: "hi" }] },
+      true, { authType: "oauth" }, "anthropic-compatible-x"
+    );
+    const text = (out.system || []).map((b) => b.text).join("\n");
+    expect(text).toContain("You are Claude Code");
+    expect(text).toContain("my own rules");
+    expect(out.system).toHaveLength(2);
   });
 
   it("assistant reasoning_content becomes a thinking block", () => {
