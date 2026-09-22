@@ -8,7 +8,7 @@
 
 ## 1. 一句话原理
 
-每个实例定期检查云端快照（1 次 API 调用），若别的机器推过更新的数据就拉取并应用，若本地内容变了就推送一份 `gzip + AES-256-GCM` 加密的整库快照。冲突语义是**文件级 last-writer-wins**。
+每个实例定期检查云端快照（1 次 API 调用），若别的机器推过更新的数据就拉取并应用，若本地内容变了就推送一份 `gzip + AES-256-GCM` 加密的整库快照。冲突语义（2026-09-22 起）：配置类表仍是**文件级 last-writer-wins**；**用量三表在拉取时按合并语义应用** —— `usageHistory` 内容去重并集、`usageDaily` 按 `byMachine` 分片每片取较新、`_meta` 的 `totalRequestsLifetime:<machineId>` 取 max，因此多机并发产生的用量是**相加**而不是互相覆盖（详见 §3.1）。
 
 | 项目 | 值 |
 |---|---|
@@ -17,7 +17,7 @@
 | 加密算法 | `scrypt(BAIDU_SYNC_KEY, salt)` → AES-256-GCM，明文先 gzip |
 | 容器格式 | `MAGIC("9RSYNC1", 8B) \| salt(16B) \| iv(12B) \| gcm-tag(16B) \| ciphertext` |
 | 上传方式 | `precreate → superfile2（4MB/片）→ create` 三步分片，**任何大小都走这条**（单步上传接口已被百度废弃，见 §6.9） |
-| 排除表 | 默认 `requestDetails`，永不参与同步，也不被拉取覆盖 |
+| 排除表 | 默认 `requestDetails,apiKeys`，永不参与同步，也不被拉取覆盖 |
 
 **`/apps/<应用名>/` 是百度网盘给应用划的沙箱目录**：网页版里它在「我的应用数据」下面，**不在「我的网盘」根目录**。去根目录找会以为同步没生效。
 
@@ -36,7 +36,7 @@
 | `BAIDU_REMOTE_DIR` | 否 | 默认 `/apps/<BAIDU_APP_NAME>/9router-sync` |
 | `BAIDU_REDIRECT_URI` | 否 | 未设时授权走 `oob`（页面显示授权码，手工粘贴） |
 | `BAIDU_SYNC_INTERVAL_MINUTES` | 否 | 默认 30 |
-| `BAIDU_SYNC_EXCLUDE_TABLES` | 否 | 逗号分隔，默认 `requestDetails` |
+| `BAIDU_SYNC_EXCLUDE_TABLES` | 否 | 逗号分隔，默认 `requestDetails,apiKeys`（`apiKeys` 是入站访问密钥，该功能计划移除，2026-09-22 起刻意排除） |
 
 > `isConfigured()` **只看上面三个必需项是否存在，不看是否已授权**。这是刻意的，见 §5.1。
 
@@ -51,6 +51,16 @@
 - 推送前会把当前库快照存到 `db/backups/sync-apply-*/`，**只保留最近 3 份**。
 - 百度配额错误（errno `20012`/`9013`）触发指数退避，最长 6 小时。
 - 拉取应用前会比对 `_meta.schemaVersion`，两端版本不一致直接报错拒绝（避免结构错配写坏库）。
+
+### 3.1 用量合并（多机并发不丢用量）
+
+- **分片 ID**：`sha256(<DATA_DIR>/machine-id)` 前 16 位（与应用机器码同源文件，本机生成、不同步）。每台机只写自己的分片/计数键 —— 单写者是合并幂等的前提。
+- **`usageDaily`**：JSON 内部按 `byMachine: { <id>: {…当日计数…, ts} }` 分片；写入只动自己的分片，顶层 totals 每次**由分片求和重算**（读路径看到的结构不变）。拉取合并对每个分片取 `ts` 较新的一份（同 ts 比 requests，再同则按 JSON 字典序，保证两台机裁决一致），跨分片求和 —— 重放同一快照不双计，云端被旧快照覆盖过也能自愈。
+- **`usageHistory`**：按 `saveRequestUsage` 现成的内容去重谓词做 `INSERT … WHERE NOT EXISTS` 并集；`id` 不随快照travel（由本机序列重新分配 —— 两机 AUTOINCREMENT 同基线，跨机 id 会撞车），因此相关查询按 `timestamp` 排序。
+- **`_meta.totalRequestsLifetime:<machineId>`**：每机只自增自己的键，合并取 max；旧的无后缀键不再写入（无读取方）。
+- **回推**：合并后若本地存在云端缺的用量内容（localExtras > 0），**当轮立即推送并集**（日志 `Pull merged N local-only usage item(s)`）；否则沿用旧行为把拉到的内容采纳为推送基线，避免无意义的回声上传。
+- **旧格式兼容**：迁移前的 `usageDaily` blob 无 `byMachine`，读写/合并时折叠进共享的 `legacy` 分片；两侧同值时合并不翻倍，只有历史分叉时取计数大的一份（等于旧 LWW 的结果，永不相加）。
+- **已知边界**：配置表（providers/settings 等）仍是整表覆盖 —— 拉取会抹掉本地未推送的配置改动（行级合并在下一批）；`settings`/`kv` 单槽值即使行级化也仍需 LWW。
 
 ---
 
@@ -79,7 +89,9 @@
 
 | 内容 | 位置 | 参与同步？ |
 |---|---|---|
-| 数据库 | `<DATA_DIR>/db/data.sqlite` | ✅ 被同步（除排除表） |
+| 数据库 | `<DATA_DIR>/db/data.sqlite` | ✅ 被同步（除排除表；用量三表合并语义见 §3.1） |
+| 入站 API Keys（库内 `apiKeys` 表） | 在数据库内 | ❌ **刻意排除**（功能计划移除，见 §2） |
+| 机器码 | `<DATA_DIR>/machine-id` | ❌ 不参与（同时是用量分片 ID 的来源） |
 | 授权凭证 | `<DATA_DIR>/baidu-sync/token.json` | ❌ **刻意排除** |
 | 同步状态 | `<DATA_DIR>/baidu-sync/state.json` | ❌ **刻意排除** |
 | 应用前备份 | `<DATA_DIR>/db/backups/sync-apply-*` | ❌ 本地归档 |

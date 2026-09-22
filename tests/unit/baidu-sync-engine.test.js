@@ -240,4 +240,77 @@ describe("baidu sync engine", () => {
       process.env.BAIDU_SYNC_KEY = "testkey";
     }
   });
+
+  it("merges usage from both machines instead of overwriting, and pushes the union back", async () => {
+    const { emptyDayShard, recomputeDayTotals } = await import("@/lib/db/helpers/usageMerge.js");
+    const now = new Date();
+    const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    // Machine A: one history row (explicit id=1), one daily shard, one lifetime key.
+    const A = await freshInstance("u-a");
+    await A.adapter.run(
+      `INSERT INTO usageHistory(id, timestamp, provider, model, promptTokens, completionTokens, cost, status) VALUES(1, ?, 'p', 'model-a', 100, 10, 0, 'ok')`,
+      [new Date(Date.now() - 120_000).toISOString()]
+    );
+    const docA = { byMachine: { "machine-A": { ...emptyDayShard(), requests: 4, promptTokens: 1000, ts: 1000 } } };
+    recomputeDayTotals(docA);
+    await A.adapter.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?)`, [dateKey, JSON.stringify(docA)]);
+    await A.adapter.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime:machine-A', '70')`);
+    const uploadsA = [];
+    await A.engine.runCycle({ adapter: A.adapter, client: mockClient({ uploads: uploadsA }) });
+    const blobA = uploadsA[0];
+    expect(blobA).toBeTruthy();
+
+    // Machine B: its own row with the SAME id (colliding AUTOINCREMENT), its
+    // own shard and lifetime key — concurrent usage on a third party's cloud.
+    const B = await freshInstance("u-b");
+    await B.adapter.run(
+      `INSERT INTO usageHistory(id, timestamp, provider, model, promptTokens, completionTokens, cost, status) VALUES(1, ?, 'p', 'model-b', 200, 20, 0, 'ok')`,
+      [new Date(Date.now() - 60_000).toISOString()]
+    );
+    const docB = { byMachine: { "machine-B": { ...emptyDayShard(), requests: 6, promptTokens: 500, ts: 2000 } } };
+    recomputeDayTotals(docB);
+    await B.adapter.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?)`, [dateKey, JSON.stringify(docB)]);
+    await B.adapter.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime:machine-B', '50')`);
+
+    const uploadsB = [];
+    const clientB = mockClient({ remoteBlob: blobA, remoteMd5: md5hex(blobA), serverMtime: Math.floor(Date.now() / 1000), uploads: uploadsB });
+    const res = await B.engine.runCycle({ adapter: B.adapter, client: clientB });
+    expect(res.pulled).toBe(true);
+
+    // history: union, colliding ids resolved locally
+    expect(B.adapter.get(`SELECT COUNT(*) c FROM usageHistory`).c).toBe(2);
+    expect(B.adapter.get(`SELECT COUNT(DISTINCT id) c FROM usageHistory`).c).toBe(2);
+    const models = B.adapter.all(`SELECT model FROM usageHistory ORDER BY model`).map((r) => r.model);
+    expect(models).toEqual(["model-a", "model-b"]);
+
+    // daily: both shards, top-level = sum (the 1亿+5千万 property in miniature)
+    const mergedDay = JSON.parse(B.adapter.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]).data);
+    expect(Object.keys(mergedDay.byMachine).sort()).toEqual(["machine-A", "machine-B"]);
+    expect(mergedDay.promptTokens).toBe(1500);
+    expect(mergedDay.requests).toBe(10);
+
+    // lifetime counters: both machines' keys coexist
+    expect(B.adapter.get(`SELECT value FROM _meta WHERE key='totalRequestsLifetime:machine-A'`).value).toBe("70");
+    expect(B.adapter.get(`SELECT value FROM _meta WHERE key='totalRequestsLifetime:machine-B'`).value).toBe("50");
+
+    // local-only usage existed ⇒ the union goes back up in the SAME cycle
+    expect(res.pushed).toBe(true);
+    expect(uploadsB).toHaveLength(1);
+
+    // Re-applying the original snapshot is idempotent: no double count, no row loss.
+    const { decryptBuffer } = await import("@/lib/sync/baidu/crypto.js");
+    const reapply = path.join(B.tempDir, "reapply.sqlite");
+    fs.writeFileSync(reapply, decryptBuffer(blobA, "testkey"));
+    const r1 = B.engine.applySnapshot(B.adapter, reapply, { excludeTables: ["requestDetails"] });
+    expect(r1.localExtras).toBeGreaterThan(0); // B still owns rows the snapshot lacks
+    expect(B.adapter.get(`SELECT COUNT(*) c FROM usageHistory`).c).toBe(2);
+    expect(JSON.parse(B.adapter.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]).data).promptTokens).toBe(1500);
+
+    // max() on lifetime counters: a higher local count survives a stale remote copy
+    await B.adapter.run(`UPDATE _meta SET value='90' WHERE key='totalRequestsLifetime:machine-A'`);
+    B.engine.applySnapshot(B.adapter, reapply, { excludeTables: ["requestDetails"] });
+    expect(B.adapter.get(`SELECT value FROM _meta WHERE key='totalRequestsLifetime:machine-A'`).value).toBe("90");
+    expect(B.adapter.get(`SELECT COUNT(*) c FROM usageHistory`).c).toBe(2);
+  });
 });
