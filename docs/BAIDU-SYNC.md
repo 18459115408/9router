@@ -150,6 +150,8 @@ chmod 后 mode: 666
 
 **坑**：同一份 `.env` 在 Linux（含 Docker）下 `DATA_DIR` 会真的生效，指向**另一张库**。跨机器同步测试时，两边看到的并不是同一份数据，现象酷似「同步把数据弄丢了」。
 
+**坑 2（2026-09-22 实测）**：在 **Git Bash** 里把 `.env` source 进环境再启动任何原生 Windows 进程（node/vitest）时，MSYS 会把 `/var/lib/9router` **预转换**成 `C:/Program Files/Git/var/lib/9router` —— 不再以 `/` 开头，上面的回落逻辑**不会触发**，进程会拿着这个伪造路径初始化一个全新空库，token 也读不到（症状：报 `No Baidu token yet`，而 `%APPDATA%` 下的 `state.json` 纹丝不动）。从 PowerShell/cmd 启动的服务不受影响。**在 Git Bash 里手动跑同步/脚本前先 `unset DATA_DIR`**（等价于回落到 `%APPDATA%\9router`，与生产一致）。误建的 `C:\Program Files\Git\var` 整个删掉即可。
+
 ### 6.5 每台机器必须单独授权；不要拷贝 `token.json`
 
 因为 token 不参与同步（§5.1），新机器**必须重新走一遍授权流程**。
