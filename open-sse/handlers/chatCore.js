@@ -152,6 +152,16 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   reqLogger.logRawRequest(body);
   log?.debug?.("FORMAT", `${sourceFormat} → ${targetFormat} | stream=${stream}`);
 
+  // Snapshot the client's request config BEFORE translation. translateRequest
+  // rewrites the body in place — stripAll() deletes the top-level thinking fields
+  // and the translators rename params — so a save site reading `body` afterwards
+  // records the provider-shaped request and the details drawer shows a request
+  // that never asked for reasoning. This keeps the top-level params as the client
+  // sent them (the thinking config is the point). `messages` is still taken by
+  // reference, so message-level rewrites (stripContentTypes) remain visible in the
+  // recorded request, as they always were.
+  const clientRequestConfig = extractRequestConfig(body, stream);
+
   // Native passthrough: CLI tool and provider are the same ecosystem
   // Skip all translation/normalization — only model and Bearer are swapped
   const clientTool = detectClientTool(clientRawRequest?.headers || {}, body);
@@ -176,6 +186,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   let translatedBody;
   let toolNameMap;
   let customToolNames;
+  // Filled in by applyThinking when an operator-declared mapping supplies the
+  // thinking wire shape: those field names match no format the extractors know,
+  // so the request line cannot read the level back off the body and would show
+  // no THINK at all. See fmtThinkReport.
+  const thinkingReport = {};
   if (passthrough) {
     log?.debug?.("PASSTHROUGH", `${clientTool} → ${provider} | native lossless`);
     translatedBody = { ...body, model: stripThinkingSuffix(upstreamModel) };
@@ -194,7 +209,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     // Normalize newer Cowork/CC beta shapes (adaptive thinking, mid-conversation system) the API rejects
     if (clientTool === "claude") normalizeClaudePassthrough(translatedBody, translatedBody.model);
   } else {
-    translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool);
+    translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool, thinkingReport);
     if (!translatedBody) {
       trackPendingRequest(model, provider, connectionId, false, true);
       return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
@@ -227,7 +242,15 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     const toolN = translatedBody.tools?.length || body.tools?.length || 0;
     const fmtStr = passthrough ? `FMT: ${sourceFormat} (passthrough)` : `FMT: ${sourceFormat}→${targetFormat}`;
     const showThinking = provider !== "grok-cli" || supportsGrokCliReasoningEffort(model);
-    const think = showThinking ? log.fmtThink?.(extractThinking(translatedBody)) : null;
+    // Read the level back off the finished body — correct for every built-in
+    // format, and it reports what the upstream will really see (a level the
+    // provider collapses, e.g. deepseek low→high, shows as "high"). When a
+    // declared mapping supplied the shape, the body carries field names the
+    // extractor cannot parse and this returns null; fall back to what the apply
+    // site recorded, so the line never implies thinking was left unset.
+    const think = showThinking
+      ? (log.fmtThink?.(extractThinking(translatedBody)) || log.fmtThinkReport?.(thinkingReport))
+      : null;
     const acc = credentials?.connectionName || credentials?.connectionId?.slice(0, 8) || "-";
     const parts = [
       `POST ${clientModel} → ${provider}/${model}`,
@@ -391,7 +414,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       connectionName: credentials?.connectionName,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
       tokens: { prompt_tokens: 0, completion_tokens: 0 },
-      request: extractRequestConfig(body, stream),
+      request: clientRequestConfig,
       providerRequest: translatedBody || null,
       response: { error: error.message || String(error), status: error.name === "AbortError" ? 499 : 502, thinking: null },
       pxpipe: pxpipeSummary,
@@ -466,7 +489,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       connectionName: credentials?.connectionName,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
       tokens: { prompt_tokens: 0, completion_tokens: 0 },
-      request: extractRequestConfig(body, stream),
+      request: clientRequestConfig,
       providerRequest: finalBody || translatedBody || null,
       response: { error: message, status: statusCode, thinking: null },
       pxpipe: pxpipeSummary,
@@ -482,7 +505,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, connectionName: credentials?.connectionName, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, connectionName: credentials?.connectionName, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log, clientRequestConfig };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

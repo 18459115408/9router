@@ -237,18 +237,29 @@ function stripAll(body) {
 // it could resolve so the caller knows whether to fall through to the format
 // default: a declaration that covers only some levels must not silently drop
 // the others.
-function applyCustomMapping(mapping, body, cfg) {
+//
+// `report` (optional out-param) receives what was written. A mapping exists for
+// upstreams whose field names match no known format, so the log line cannot
+// re-read the level off the final body the way fmtThink does for the built-in
+// shapes — it has to be recorded here, where the mapping is applied.
+function applyCustomMapping(mapping, body, cfg, report) {
   if (!mapping || typeof mapping !== "object") return false;
   const level = cfg.mode === "none" ? "disabled" : (cfg.mode === "auto" ? "auto" : toLevel(cfg));
   if (!level) return false;
   const fragment = mapping[level];
   if (!fragment || typeof fragment !== "object") return false;
   Object.assign(body, fragment);
+  if (report) {
+    report.level = level;
+    report.fields = Object.entries(fragment).map(([name, value]) => ({ name, value }));
+  }
   return true;
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
+// `report` (optional out-param) records what was written when the shape is not
+// one extractThinking can read back — see applyCustomMapping.
+function applyFormat(fmt, body, cfg, caps, supportedLevels, display, report = null) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -258,7 +269,7 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
   // it exists precisely for upstreams whose field names do not match any format
   // the gateway knows. When the mapping has no entry for the requested level the
   // format default still runs, so a partial map degrades instead of breaking.
-  if (applyCustomMapping(caps.thinkingMapping, body, cfg)) return;
+  if (applyCustomMapping(caps.thinkingMapping, body, cfg, report)) return;
 
   switch (fmt) {
     case "openai": {
@@ -384,7 +395,11 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
 // Mutates and returns body. No-op when model has no reasoning capability.
 // `intent` is a pre-captured config (from captureThinking on the original body);
 // falls back to extracting from the current body when omitted.
-export function applyThinking(targetFormat, model, body, provider = null, intent = undefined) {
+// `report` is an optional out-param: when a declared mapping supplies the wire
+// shape, its field names match no format the extractors know, so the apply site
+// records what it wrote for the request log. Left untouched for every built-in
+// format, where the log can read the level back off the body.
+export function applyThinking(targetFormat, model, body, provider = null, intent = undefined, report = null) {
   if (!body || typeof body !== "object") return body;
 
   const { cleanModel, override } = parseSuffix(model);
@@ -404,6 +419,6 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
   // comes back at all; keep what the client asked for instead of resetting it.
   const display = typeof body.thinking?.display === "string" ? body.thinking.display : undefined;
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps, supportedLevels, display);
+  applyFormat(fmt, body, cfg, caps, supportedLevels, display, report);
   return body;
 }

@@ -2,10 +2,19 @@ import { saveRequestUsage, appendRequestLog, saveRequestDetail } from "@/lib/usa
 import { COLORS } from "../../utils/stream.js";
 import { canonicalizeUsage } from "../../utils/usageTracking.js";
 
+// Fields worth keeping in the stored client request. Everything here is optional
+// (the required model/messages/stream are added explicitly in extractRequestConfig).
+//
+// The thinking-related entries must cover every shape extractThinking() can read,
+// or the details drawer shows a request that looks like it never asked for
+// reasoning: a Claude client's effort rides in output_config, a Gemini client's in
+// generationConfig.thinkingConfig, and OpenAI's in reasoning_effort.
 const OPTIONAL_PARAMS = [
   "temperature", "top_p", "top_k",
   "max_tokens", "max_completion_tokens",
   "thinking", "reasoning", "enable_thinking",
+  "reasoning_effort", "output_config", "thinking_budget",
+  "generationConfig",
   "presence_penalty", "frequency_penalty",
   "seed", "stop", "tools", "tool_choice",
   "response_format", "prediction", "store", "metadata",

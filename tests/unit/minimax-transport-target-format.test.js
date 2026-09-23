@@ -178,6 +178,9 @@ describe("MiniMax-M3 multi-transport routing", () => {
       expect.anything(),
       "test-connection",
       null,
+      // Out-param the handler passes so a declared thinking mapping can report
+      // what it wrote; see thinking-log-line-e2e.test.js.
+      expect.any(Object),
     );
     expect(executeMock).toHaveBeenCalledTimes(1);
     const requestBody = executeMock.mock.calls[0][0].body;

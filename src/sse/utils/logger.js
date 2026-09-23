@@ -56,6 +56,33 @@ export function fmtThink(intent) {
   return null;
 }
 
+const THINK_FIELDS_MAX = 120;
+
+function formatThinkValue(value) {
+  try {
+    const s = JSON.stringify(value);
+    return s === undefined ? String(value) : s;
+  } catch {
+    return String(value);
+  }
+}
+
+// Format the apply-site report left by a declared thinking mapping.
+//
+// fmtThink reads the level back off the finished body, which only works for the
+// built-in shapes it knows. A custom mapping exists precisely for upstreams
+// whose field names match no known shape, so extractThinking() returns null on
+// the resulting body and the request line would silently drop its THINK field —
+// the request goes out with the right thinking params while the log implies none
+// were set. This describes what was actually written instead.
+export function fmtThinkReport(report) {
+  if (!report || !report.level || !Array.isArray(report.fields) || report.fields.length === 0) return null;
+  const level = report.level === "disabled" ? "off" : report.level;
+  let fields = report.fields.map(({ name, value }) => `${name}=${formatThinkValue(value)}`).join(", ");
+  if (fields.length > THINK_FIELDS_MAX) fields = `${fields.slice(0, THINK_FIELDS_MAX - 1)}…`;
+  return `${level} (custom: ${fields})`;
+}
+
 function formatData(data) {
   if (!data) return "";
   if (typeof data === "string") return data;
