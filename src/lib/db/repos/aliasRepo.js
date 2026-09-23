@@ -29,6 +29,21 @@ export async function getCustomModels() {
   return Object.values(all);
 }
 
+// Merge a caps patch into the stored caps. Shallow, with `null` meaning "delete
+// this key" — the capability object now carries several independent settings
+// (modalities, thinking format, levels, mapping) and a caller that only means to
+// flip one of them must not have to resend the rest, nor be able to clobber it
+// by accident. `undefined` leaves a key alone.
+function mergeCaps(prev, patch) {
+  if (!patch || typeof patch !== "object") return prev;
+  const next = { ...(prev || {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete next[k];
+    else if (v !== undefined) next[k] = v;
+  }
+  return Object.keys(next).length ? next : null;
+}
+
 // Atomic upsert inside transaction to prevent duplicate races.
 // Re-adding an existing model updates caps/name without resetting omitted fields.
 export async function addCustomModel({ providerAlias, id, type = "llm", name, caps }) {
@@ -39,11 +54,15 @@ export async function addCustomModel({ providerAlias, id, type = "llm", name, ca
     const row = db.get(`SELECT value FROM kv WHERE scope = 'customModels' AND key = ?`, [k]);
     if (row) {
       const prev = parseJson(row.value) || {};
-      const next = { ...prev, ...(name ? { name } : {}), ...(caps ? { caps } : {}) };
+      const merged = mergeCaps(prev.caps, caps);
+      const next = { ...prev, ...(name ? { name } : {}) };
+      if (merged) next.caps = merged;
+      else delete next.caps;
       db.run(`UPDATE kv SET value = ? WHERE scope = 'customModels' AND key = ?`, [stringifyJson(next), k]);
       return;
     }
-    const value = stringifyJson({ providerAlias, id, type, name: name || id, ...(caps ? { caps } : {}) });
+    const initialCaps = mergeCaps(null, caps);
+    const value = stringifyJson({ providerAlias, id, type, name: name || id, ...(initialCaps ? { caps: initialCaps } : {}) });
     db.run(`INSERT INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, value]);
     added = true;
   });

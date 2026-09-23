@@ -61,16 +61,31 @@ describe("declared caps reader", () => {
     expect(getDeclaredCaps(NODE, "step-5-preview:free")).toEqual({ vision: true });
   });
 
-  it("ignores rows without caps and drops non-true values", async () => {
+  it("keeps booleans in both directions, but only valid thinking values", async () => {
     rows = [
       { providerAlias: NODE, id: "no-caps", type: "llm" },
-      { providerAlias: NODE, id: "explicit-false", type: "llm", caps: { vision: false } },
+      // `false` is preserved: the reader does not decide whether it is honoured
+      // (capabilities.applyDeclaredCaps does — it is, for `reasoning`).
+      { providerAlias: NODE, id: "explicit-false", type: "llm", caps: { reasoning: false } },
       { providerAlias: NODE, id: "junk", type: "llm", caps: { vision: "yes", bogus: true } },
+      // thinking config is validated, not passed through
+      {
+        providerAlias: NODE, id: "thinking", type: "llm",
+        caps: {
+          thinkingFormat: "not-a-format",
+          thinkingLevels: ["low", "bogus", "high", "low"],
+          thinkingMapping: { low: { reasoning_effort: "low" }, bad: "nope" },
+        },
+      },
     ];
     await refreshDeclaredCaps();
     expect(getDeclaredCaps(NODE, "no-caps")).toBeNull();
-    expect(getDeclaredCaps(NODE, "explicit-false")).toBeNull();
+    expect(getDeclaredCaps(NODE, "explicit-false")).toEqual({ reasoning: false });
     expect(getDeclaredCaps(NODE, "junk")).toBeNull();
+    expect(getDeclaredCaps(NODE, "thinking")).toEqual({
+      thinkingLevels: ["low", "high"],
+      thinkingMapping: { low: { reasoning_effort: "low" } },
+    });
   });
 
   it("keeps the previous cache when the database read fails", async () => {

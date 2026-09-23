@@ -82,6 +82,20 @@ export function getThinkingLevels(provider, model) {
   if (provider === "kiro" && resolveKiroEffortPath(model) === null) return null;
   const caps = getCapabilitiesForModel(provider, model);
   if (!caps.reasoning) return null;
+
+  // An operator declaration wins outright. The tables below guess from the model
+  // id, which is exactly what goes wrong for a custom model: a private id matches
+  // no pattern and silently gets the generic four levels, while a family name may
+  // match a pattern whose level set is not what this particular upstream wants.
+  // The declaration states a fact, so it replaces the guess rather than refining it.
+  if (Array.isArray(caps.thinkingLevels) && caps.thinkingLevels.length) {
+    let declared = [...caps.thinkingLevels];
+    // "none" is the off switch; drop it when the model cannot disable thinking,
+    // matching how the table-derived sets are filtered below.
+    if (caps.thinkingCanDisable === false) declared = declared.filter((l) => l !== "none");
+    return declared;
+  }
+
   const hit = PATTERN_THINKING.find((entry) =>
     (!entry.provider || entry.provider === provider) && matchPattern(entry.pattern, model)
   );

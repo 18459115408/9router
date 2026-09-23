@@ -81,12 +81,62 @@ function keyOf(provider, model) {
   return `${provider}:${baseId(model)}`;
 }
 
+// Wire formats a declaration may name. Mirrors the `thinkingFormat` enum in
+// capabilities.js / the cases in thinkingUnified.applyFormat — an unknown value
+// would silently fall through to a generic shape, so it is dropped instead.
+export const THINKING_FORMATS = [
+  "openai", "claude-adaptive", "claude-budget", "gemini-level", "gemini-budget",
+  "zai", "qwen", "deepseek", "kimi", "minimax", "hunyuan", "step",
+];
+
+// Levels a declaration may list, low→high. "none" is the off switch and is
+// offered separately by the UI; "auto" means "let the client decide".
+export const THINKING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
+
+function sanitizeMapping(mapping) {
+  if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) return null;
+  const clean = {};
+  for (const [level, fragment] of Object.entries(mapping)) {
+    if (!fragment || typeof fragment !== "object" || Array.isArray(fragment)) continue;
+    // Shallow copy only: the fragments are body fields, and deep-walking them
+    // would invite prototype-pollution style keys for no benefit.
+    const safe = {};
+    for (const [k, v] of Object.entries(fragment)) {
+      if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+      safe[k] = v;
+    }
+    if (Object.keys(safe).length) clean[level] = safe;
+  }
+  return Object.keys(clean).length ? clean : null;
+}
+
 function sanitize(caps) {
   if (!caps || typeof caps !== "object") return null;
   const clean = {};
+
+  // Modalities + reasoning. Booleans are kept in BOTH directions here; whether a
+  // `false` is honoured is decided in capabilities.applyDeclaredCaps (it is, for
+  // `reasoning`; the modality flags stay additive).
   for (const k of DECLARABLE_KEYS) {
-    if (caps[k] === true) clean[k] = true;
+    if (typeof caps[k] === "boolean") clean[k] = caps[k];
   }
+
+  // Thinking config — explicit overrides, so validated rather than merged.
+  if (typeof caps.thinkingFormat === "string" && THINKING_FORMATS.includes(caps.thinkingFormat)) {
+    clean.thinkingFormat = caps.thinkingFormat;
+  }
+  if (typeof caps.thinkingCanDisable === "boolean") {
+    clean.thinkingCanDisable = caps.thinkingCanDisable;
+  }
+  if (Array.isArray(caps.thinkingLevels)) {
+    const levels = caps.thinkingLevels.filter((l) => typeof l === "string" && THINKING_LEVELS.includes(l));
+    // Dedupe, preserving the operator's low→high order.
+    const ordered = [...new Set(levels)];
+    if (ordered.length) clean.thinkingLevels = ordered;
+  }
+  const mapping = sanitizeMapping(caps.thinkingMapping);
+  if (mapping) clean.thinkingMapping = mapping;
+
   return Object.keys(clean).length ? clean : null;
 }
 

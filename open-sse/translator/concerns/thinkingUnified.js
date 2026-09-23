@@ -231,12 +231,34 @@ function stripAll(body) {
   }
 }
 
+// Operator-supplied level → body-fragment map, e.g.
+//   { "low": { "thinking": { "type": "enabled" }, "reasoning_effort": "low" } }
+// Keys may be a level, "disabled" (the off switch) or "auto". Returns the keys
+// it could resolve so the caller knows whether to fall through to the format
+// default: a declaration that covers only some levels must not silently drop
+// the others.
+function applyCustomMapping(mapping, body, cfg) {
+  if (!mapping || typeof mapping !== "object") return false;
+  const level = cfg.mode === "none" ? "disabled" : (cfg.mode === "auto" ? "auto" : toLevel(cfg));
+  if (!level) return false;
+  const fragment = mapping[level];
+  if (!fragment || typeof fragment !== "object") return false;
+  Object.assign(body, fragment);
+  return true;
+}
+
 // Apply unified thinking config to body in the resolved provider-native format.
 function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
   const eff = none && !canDisable ? { mode: "level", level: "minimal" } : cfg;
+
+  // A declared mapping takes precedence over the built-in shape for this format:
+  // it exists precisely for upstreams whose field names do not match any format
+  // the gateway knows. When the mapping has no entry for the requested level the
+  // format default still runs, so a partial map degrades instead of breaking.
+  if (applyCustomMapping(caps.thinkingMapping, body, cfg)) return;
 
   switch (fmt) {
     case "openai": {

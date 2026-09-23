@@ -5,8 +5,9 @@ import PropTypes from "prop-types";
 import { Button, Toggle } from "@/shared/components";
 import { CAPACITY_META } from "@/shared/constants/models";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
+import ThinkingConfigEditor from "./ThinkingConfigEditor";
 
-function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting, caps, onToggleCap }) {
+function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting, caps, onToggleCap, onUpdateCaps }) {
   const borderColor = testStatus === "ok"
     ? "border-green-500/40"
     : testStatus === "error"
@@ -20,7 +21,8 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
     : undefined;
 
   return (
-    <div className={`flex items-center gap-3 p-3 rounded-lg border ${borderColor} hover:bg-sidebar/50`}>
+    <div className={`rounded-lg border ${borderColor} hover:bg-sidebar/50`}>
+      <div className="flex items-center gap-3 p-3">
       <span
         className="material-symbols-outlined text-base text-text-muted"
         style={iconColor ? { color: iconColor } : undefined}
@@ -83,6 +85,12 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
       >
         <span className="material-symbols-outlined text-sm">delete</span>
       </button>
+      </div>
+      {onUpdateCaps && (
+        <div className="border-t border-border/50 px-3 pb-3 pt-2">
+          <ThinkingConfigEditor caps={caps} onChange={onUpdateCaps} />
+        </div>
+      )}
     </div>
   );
 }
@@ -235,7 +243,12 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
               caps={capsByModelId[id]}
               onToggleCap={
                 source === "custom" && onToggleModelCap
-                  ? (key, value) => onToggleModelCap(id, { ...(capsByModelId[id] || {}), [key]: value })
+                  ? (key, value) => onToggleModelCap(id, { [key]: value })
+                  : undefined
+              }
+              onUpdateCaps={
+                source === "custom" && onToggleModelCap
+                  ? (patch) => onToggleModelCap(id, patch)
                   : undefined
               }
             />

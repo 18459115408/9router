@@ -58,6 +58,12 @@ export const DEFAULT_CAPABILITIES = {
   thinkingCanDisable: true,  // false → model cannot turn thinking off (clamp to min instead of disable)
   thinkingRange: null,       // { min, max } for budget formats; null = no clamp
   thinkingEffortSupported: false, // zai format only: model accepts a reasoning_effort level (GLM-5.2+; older GLM ignores it)
+  // Operator-declared thinking picker for custom models. null → use the tables
+  // above. When set these OVERRIDE (not merge): the operator is stating a fact
+  // about a model the tables cannot know, and guessing over them would defeat
+  // the point. See customCapsOverride.js.
+  thinkingLevels: null,      // ordered low→high, e.g. ["low","high","max"]
+  thinkingMapping: null,     // { "<level|disabled|auto>": { ...body fragment } }
   // limits (tokens)
   contextWindow: 200000,
   maxOutput: 64000,
@@ -540,21 +546,53 @@ export const DECLARABLE_KEYS = ["vision", "pdf", "audioInput", "videoInput", "re
 
 // Overlay the operator's declaration for this exact provider+model.
 //
-// Strictly additive, like every other refinement here: a declaration can turn a
-// capability ON, never off. Unchecking the box for a model the hand-written
-// tables already cover therefore changes nothing — the tables stay in charge,
-// which keeps a mis-click from silently disabling images on a known model.
+// Two different merge rules, deliberately:
+//
+//  • Modalities (vision/pdf/audio/video) are ADDITIVE. A declaration can turn
+//    one on, never off, so unchecking a box for a model the hand-written tables
+//    already cover changes nothing — a mis-click cannot silently start
+//    stripping images from a known-good model.
+//
+//  • Thinking config (format / canDisable / levels / mapping) OVERRIDES. These
+//    are explicit statements about a model the tables cannot know, and the
+//    built-in guess is often exactly what the operator is trying to correct —
+//    e.g. a private model whose name matches no pattern, or one that wants a
+//    different effort field than its family default. Merging would defeat the
+//    purpose.
 function applyDeclaredCaps(result, provider, model) {
   // Hand the source the same vendor-stripped id the tables are matched
   // against, so "stepfun/step-5-preview" and "step-5-preview" hit one key.
   const base = model.includes("/") ? model.split("/").pop() : model;
   const declared = getCustomCapsSource()?.getCaps(provider, base);
   if (!declared) return result;
+
   for (const key of DECLARABLE_KEYS) {
     if (declared[key] === true && result[key] !== true) {
       result = { ...result, [key]: true };
     }
   }
+
+  // `reasoning: false` is honoured too (unlike the additive modality flags):
+  // declaring "this model does not think" is a legitimate correction for an id
+  // the name heuristics guessed wrong, and it is what makes the reasoning
+  // toggle in the dashboard actually turn off.
+  if (declared.reasoning === false && result.reasoning !== false) {
+    result = { ...result, reasoning: false };
+  }
+
+  if (typeof declared.thinkingFormat === "string" && declared.thinkingFormat) {
+    result = { ...result, thinkingFormat: declared.thinkingFormat };
+  }
+  if (typeof declared.thinkingCanDisable === "boolean") {
+    result = { ...result, thinkingCanDisable: declared.thinkingCanDisable };
+  }
+  if (Array.isArray(declared.thinkingLevels)) {
+    result = { ...result, thinkingLevels: declared.thinkingLevels };
+  }
+  if (declared.thinkingMapping && typeof declared.thinkingMapping === "object") {
+    result = { ...result, thinkingMapping: declared.thinkingMapping };
+  }
+
   return result;
 }
 
