@@ -577,6 +577,13 @@ export default function ProviderDetailPage() {
     }
   };
 
+  // Persist a capability declaration on an existing custom model. Re-posting the
+  // same row upserts (aliasRepo.addCustomModel merges), so this doubles as the
+  // edit path — no separate endpoint needed.
+  const handleToggleModelCap = async (modelId, caps) => {
+    await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps);
+  };
+
   // Fetch Qoder model list and automatically add to available models
   const handleImportQoderModels = async () => {
     if (importingQoderModels) return;
@@ -1010,8 +1017,9 @@ export default function ProviderDetailPage() {
           onCopy={copy}
           onSetAlias={handleSetAlias}
           onDeleteAlias={handleDeleteAlias}
-          onAddCustomModel={(modelId) => handleAddCustomModel(modelId, "llm", providerStorageAlias)}
+          onAddCustomModel={(modelId, caps) => handleAddCustomModel(modelId, "llm", providerStorageAlias, caps)}
           onDeleteCustomModel={(modelId) => handleDeleteCustomModel(modelId, "llm", providerStorageAlias)}
+          onToggleModelCap={(modelId, caps) => handleToggleModelCap(modelId, caps)}
           connections={connections}
           isAnthropic={isAnthropicCompatible}
         />

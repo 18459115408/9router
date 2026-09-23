@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import PropTypes from "prop-types";
-import { Button } from "@/shared/components";
+import { Button, Toggle, CapacityBadges } from "@/shared/components";
+import { CAPACITY_META } from "@/shared/constants/models";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
-function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting }) {
+
+const defaultCaps = () => Object.fromEntries(Object.keys(CAPACITY_META).map((key) => [key, false]));
+
+function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting, caps, onToggleCap }) {
   const borderColor = testStatus === "ok"
     ? "border-green-500/40"
     : testStatus === "error"
@@ -59,6 +63,19 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
             </div>
           )}
         </div>
+        {onToggleCap && (
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            {Object.entries(CAPACITY_META).map(([key, meta]) => (
+              <Toggle
+                key={key}
+                checked={!!caps?.[key]}
+                onChange={(v) => onToggleCap(key, v)}
+                label={meta.label}
+                size="sm"
+              />
+            ))}
+          </div>
+        )}
       </div>
       <button
         onClick={onDeleteAlias}
@@ -71,12 +88,21 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
   );
 }
 
-export default function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, modelAliases, customModels, copied, onCopy, onDeleteAlias, onAddCustomModel, onDeleteCustomModel, connections, isAnthropic }) {
+export default function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, modelAliases, customModels, copied, onCopy, onDeleteAlias, onAddCustomModel, onDeleteCustomModel, onToggleModelCap, connections, isAnthropic }) {
   const [newModel, setNewModel] = useState("");
+  const [newCaps, setNewCaps] = useState(defaultCaps);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [testingModelId, setTestingModelId] = useState(null);
   const [modelTestResults, setModelTestResults] = useState({});
+
+  // Declared capabilities live on the customModels row, so only those rows can
+  // carry them (legacy alias-backed rows have nowhere to store a declaration).
+  const capsByModelId = Object.fromEntries(
+    (customModels || [])
+      .filter((m) => m.providerAlias === providerStorageAlias && m.caps)
+      .map((m) => [m.id, m.caps])
+  );
 
   const handleTestModel = async (modelId) => {
     if (testingModelId) return;
@@ -113,8 +139,9 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
 
     setAdding(true);
     try {
-      await onAddCustomModel(modelId);
+      await onAddCustomModel(modelId, newCaps);
       setNewModel("");
+      setNewCaps(defaultCaps());
     } catch (error) {
       console.log("Error adding model:", error);
     } finally {
@@ -187,6 +214,25 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
         </Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="text-xs text-text-muted">Capabilities for the model being added:</span>
+        {Object.entries(CAPACITY_META).map(([key, meta]) => (
+          <Toggle
+            key={key}
+            checked={!!newCaps[key]}
+            onChange={(v) => setNewCaps((prev) => ({ ...prev, [key]: v }))}
+            label={meta.label}
+            description={meta.desc}
+            size="sm"
+          />
+        ))}
+      </div>
+      <p className="text-xs text-text-muted -mt-2">
+        Declared here, the gateway forwards matching content instead of replacing it with a
+        placeholder — an unknown model is treated as text-only until you say otherwise.
+        Unchecking never disables a capability the built-in tables already know about.
+      </p>
+
       {!canImport && (
         <p className="text-xs text-text-muted">
           Add a connection to enable importing models.
@@ -206,6 +252,12 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
               onTest={connections.length > 0 ? () => handleTestModel(id) : undefined}
               testStatus={modelTestResults[id]}
               isTesting={testingModelId === id}
+              caps={capsByModelId[id]}
+              onToggleCap={
+                source === "custom" && onToggleModelCap
+                  ? (key, value) => onToggleModelCap(id, { ...(capsByModelId[id] || {}), [key]: value })
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -224,6 +276,7 @@ CompatibleModelsSection.propTypes = {
   onDeleteAlias: PropTypes.func.isRequired,
   onAddCustomModel: PropTypes.func.isRequired,
   onDeleteCustomModel: PropTypes.func.isRequired,
+  onToggleModelCap: PropTypes.func,
   connections: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string,
     isActive: PropTypes.bool,

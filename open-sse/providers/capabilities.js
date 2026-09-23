@@ -505,11 +505,63 @@ function getCatalogSource() {
   return (catalogSource = globalThis.__9rCatalogSource || null);
 }
 
-// Apply the synced catalog + name heuristic on top of a table-resolved result.
-// Strictly additive: a capability already true stays true, and a false one only
-// flips when an outside source positively declares support.
+// Operator-declared capabilities from the dashboard (customModels), installed
+// by the server at startup the same way — same globalThis slot dance, since the
+// browser bundle has no DB to read.
+//
+// Why this exists: a model the tables below have never heard of — any model
+// behind a user-added OpenAI/Anthropic-compatible node — resolves to the
+// DEFAULT_CAPABILITIES floor (vision:false), and stripUnsupportedModalities()
+// then replaces the operator's images with "[image omitted: model has no vision
+// support]" before the request leaves the process. The declaration is the only
+// way to tell the gateway that such a model can read images.
+let customCapsSource = null;
+
+/**
+ * Install the declared-caps reader (server only).
+ * @param {{ getCaps: (provider: string|null, model: string) => object|null } | null} source
+ */
+export function setCustomCapsSource(source) {
+  customCapsSource = source;
+  if (typeof globalThis !== "undefined") globalThis.__9rCustomCapsSource = source;
+}
+
+function getCustomCapsSource() {
+  if (customCapsSource) return customCapsSource;
+  if (typeof globalThis === "undefined") return null;
+  return (customCapsSource = globalThis.__9rCustomCapsSource || null);
+}
+
+// Keys an operator declaration may set, and the only ones this module will act
+// on. `vision`/`pdf`/`audioInput`/`videoInput` are exactly what
+// stripUnsupportedModalities() gates on; `reasoning` drives thinking handling.
+// The dashboard's CAPACITY_META decides which of these it actually offers.
+export const DECLARABLE_KEYS = ["vision", "pdf", "audioInput", "videoInput", "reasoning"];
+
+// Overlay the operator's declaration for this exact provider+model.
+//
+// Strictly additive, like every other refinement here: a declaration can turn a
+// capability ON, never off. Unchecking the box for a model the hand-written
+// tables already cover therefore changes nothing — the tables stay in charge,
+// which keeps a mis-click from silently disabling images on a known model.
+function applyDeclaredCaps(result, provider, model) {
+  // Hand the source the same vendor-stripped id the tables are matched
+  // against, so "stepfun/step-5-preview" and "step-5-preview" hit one key.
+  const base = model.includes("/") ? model.split("/").pop() : model;
+  const declared = getCustomCapsSource()?.getCaps(provider, base);
+  if (!declared) return result;
+  for (const key of DECLARABLE_KEYS) {
+    if (declared[key] === true && result[key] !== true) {
+      result = { ...result, [key]: true };
+    }
+  }
+  return result;
+}
+
+// Apply the synced catalog + declared caps + name heuristic on top of a
+// table-resolved result.
 function refine(base, provider, model) {
-  const result = { ...DEFAULT_CAPABILITIES, ...base };
+  const result = applyDeclaredCaps({ ...DEFAULT_CAPABILITIES, ...base }, provider, model);
 
   const source = getCatalogSource();
   if (source) {
@@ -595,13 +647,13 @@ export function getCapabilitiesForModel(provider, model) {
   // 1. Provider-specific override
   if (provider) {
     const providerCaps = PROVIDER_CAPABILITIES[provider];
-    if (providerCaps?.[model]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[model] };
-    if (providerCaps?.[baseModel]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[baseModel] };
+    if (providerCaps?.[model]) return applyDeclaredCaps({ ...DEFAULT_CAPABILITIES, ...providerCaps[model] }, provider, model);
+    if (providerCaps?.[baseModel]) return applyDeclaredCaps({ ...DEFAULT_CAPABILITIES, ...providerCaps[baseModel] }, provider, model);
   }
 
   // 2. Canonical exact
-  if (MODEL_CAPABILITIES[baseModel]) return { ...DEFAULT_CAPABILITIES, ...MODEL_CAPABILITIES[baseModel] };
-  if (MODEL_CAPABILITIES[model]) return { ...DEFAULT_CAPABILITIES, ...MODEL_CAPABILITIES[model] };
+  if (MODEL_CAPABILITIES[baseModel]) return applyDeclaredCaps({ ...DEFAULT_CAPABILITIES, ...MODEL_CAPABILITIES[baseModel] }, provider, model);
+  if (MODEL_CAPABILITIES[model]) return applyDeclaredCaps({ ...DEFAULT_CAPABILITIES, ...MODEL_CAPABILITIES[model] }, provider, model);
 
   // 3. Pattern match (first match wins), refined by catalog + name heuristic
   for (const { pattern, caps } of PATTERN_CAPABILITIES) {
