@@ -84,12 +84,17 @@ git merge upstream/master
 | `scripts/translate-readme.js` | 生成上面那些副本的脚本 |
 | `public/i18n/literals/*.json`（除 `zh-CN.json` 外） | 非中文语言词库；界面已固定中文 |
 | `src/i18n/config.js`、`LanguageSwitcher.js`、`HeaderLanguage.js`、`src/shared/constants/locales.js`、`src/app/api/locale/` | 语言切换相关；`src/i18n/runtime.js` 是**保留**的精简版，若上游改动它需人工合并（保持固定 zh-CN） |
+| `CLAUDE.md` | 上游的代理指引，2026-09-23 删除——内容已合并进根 `AGENTS.md` §8，勿恢复 |
+| npm 自升级机制（2026-09-23 删） | 横幅、`/api/version` GET 与 `update` 路由、`src/lib/updater/`、`src/lib/appUpdater.js`、CLI 的 `checkForUpdate`/`--skip-update`/更新菜单、`UPDATER_CONFIG` 的 install 字段。**保留项**：`/api/version/shutdown` 路由、`src/lib/processKill.js`（关停按钮在用）——下面的路径模式不会误报它们 |
 
-合并后两条命令检查是否复活：
+合并后用命令检查是否复活：
 
 ```bash
-# 目录/文件级：有输出说明上游把它们带回来了
-git ls-files | grep -E "^(gitbook|i18n)/|translate-readme|api/locale|LanguageSwitcher|HeaderLanguage|shared/constants/locales"
+# 路径级：有输出说明上游把已删文件带回来了
+git ls-files | grep -E "^(gitbook|i18n)/|translate-readme|api/locale|LanguageSwitcher|HeaderLanguage|shared/constants/locales|CLAUDE\.md|api/version/(route|update)|lib/updater/|appUpdater"
+
+# 内容级：CLI 自升级链是否被带回（有输出 = cli.js 又被塞了更新逻辑）
+grep -nE "checkForUpdate|skip-update|INSTALL_CMD_LATEST" cli/cli.js || echo clean
 
 # 非中文词库：除 zh-CN.json 外有输出就要删
 git ls-files public/i18n/literals/ | grep -v "zh-CN.json"

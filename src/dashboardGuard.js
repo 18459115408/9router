@@ -28,7 +28,6 @@ const PUBLIC_API_PATHS = [
   "/api/auth/status",
   "/api/auth/oidc",
   "/api/auth/saml",
-  "/api/version",
   "/api/settings/require-login",
   // Baidu OAuth redirect target: only exchanges a code minted for this app,
   // never echoes the token. All other /api/sync/baidu/* routes stay auth-gated.
@@ -44,7 +43,6 @@ const ALWAYS_PROTECTED = [
   "/api/shutdown",
   "/api/settings/database",
   "/api/version/shutdown",
-  "/api/version/update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
 ];

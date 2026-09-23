@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { killAppProcesses } from "@/lib/appUpdater";
+import { killAppProcesses } from "@/lib/processKill";
 
-// Shutdown app to release file locks for manual update
+// Stop the app: kill sibling processes (MITM, tunnels, tray, stray servers) then exit
 export async function POST() {
   try {
     await killAppProcesses();
   } catch { /* best effort */ }
 
-  const response = NextResponse.json({ success: true, message: "Shutting down for manual update..." });
+  const response = NextResponse.json({ success: true, message: "Shutting down..." });
 
   setTimeout(() => process.exit(0), 500);
 
