@@ -642,6 +642,21 @@ export default function ProfilePage() {
     }
   };
 
+  const updateObservabilityRedactPayloads = async (redact) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ observabilityRedactPayloads: redact }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, observabilityRedactPayloads: redact }));
+      }
+    } catch (err) {
+      console.error("Failed to update observabilityRedactPayloads:", err);
+    }
+  };
+
   const reloadSettings = async () => {
     try {
       const res = await fetch("/api/settings");
@@ -814,6 +829,7 @@ export default function ProfilePage() {
       : "Not authorized";
 
   const observabilityEnabled = settings.enableObservability === true;
+  const observabilityRedactPayloads = settings.observabilityRedactPayloads !== false;
 
   const handleShutdown = async () => {
     setIsShuttingDown(true);
@@ -1811,6 +1827,22 @@ export default function ProfilePage() {
               checked={observabilityEnabled}
               onChange={updateObservabilityEnabled}
               disabled={loading}
+            />
+          </div>
+
+          <div className="mt-4 flex items-start sm:items-center justify-between gap-4 border-t border-black/5 pt-4 dark:border-white/10">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm sm:text-base">Redact conversation payloads</p>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Hide prompts and completions in the details view. Turn off only on a
+                single-user local install — anyone who can open the dashboard will
+                otherwise be able to read every recorded conversation.
+              </p>
+            </div>
+            <Toggle
+              checked={observabilityRedactPayloads}
+              onChange={updateObservabilityRedactPayloads}
+              disabled={loading || !observabilityEnabled}
             />
           </div>
         </Card>

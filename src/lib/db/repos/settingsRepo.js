@@ -41,6 +41,12 @@ const DEFAULT_SETTINGS = {
   observabilityBatchSize: 20,
   observabilityFlushIntervalMs: 5000,
   observabilityMaxJsonSize: 5,
+  // The details API strips conversation payloads (prompts, tool calls,
+  // completions) before returning them, because /api/usage is reachable without
+  // login whenever requireLogin=false and the dashboard may be tunnelled. Keep
+  // this true on any shared/remote instance; set false only for a single-user
+  // local install that needs to inspect raw request/response bodies.
+  observabilityRedactPayloads: true,
   outboundProxyEnabled: false,
   outboundProxyUrl: "",
   outboundNoProxy: "",
