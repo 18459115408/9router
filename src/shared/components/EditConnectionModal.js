@@ -7,7 +7,38 @@ import Input from "@/shared/components/Input";
 import Button from "@/shared/components/Button";
 import Badge from "@/shared/components/Badge";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
+import { getRelativeTime } from "@/shared/utils";
+import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import Select from "@/shared/components/Select";
+
+const MODEL_LOCK_PREFIX = "modelLock_";
+
+// Live countdown for one model-lock expiry. Effect-based so Date.now() never
+// runs during render.
+function LockCountdown({ until }) {
+  const [remaining, setRemaining] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const diff = new Date(until).getTime() - Date.now();
+      if (diff <= 0) {
+        setRemaining("");
+        return;
+      }
+      const secs = Math.floor(diff / 1000);
+      if (secs < 60) setRemaining(`${secs}s`);
+      else if (secs < 3600) setRemaining(`${Math.floor(secs / 60)}m ${secs % 60}s`);
+      else setRemaining(`${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [until]);
+
+  if (!remaining) return null;
+
+  return <span className="font-mono text-orange-500">⏱ {remaining}</span>;
+}
 
 export default function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
   const [formData, setFormData] = useState({
@@ -28,6 +59,7 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [clearingStatus, setClearingStatus] = useState(false);
 
   useEffect(() => {
     if (connection) {
@@ -66,6 +98,38 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
     ? (isOpenAICompatibleProvider(connection.provider) || isAnthropicCompatibleProvider(connection.provider))
     : false;
   const providerRegions = connection ? (AI_PROVIDERS?.[connection.provider]?.regions || null) : null;
+
+  // Model locks currently benching this account: flat modelLock_<model> fields
+  // holding an ISO expiry (modelLock___all = account-wide lock).
+  const modelLocks = connection
+    ? Object.entries(connection)
+        .filter(([key, value]) => key.startsWith(MODEL_LOCK_PREFIX) && value)
+        .map(([key, value]) => ({
+          key,
+          model: key.slice(MODEL_LOCK_PREFIX.length),
+          until: value,
+        }))
+        .sort((a, b) => new Date(a.until).getTime() - new Date(b.until))
+    : [];
+
+  const lockSignature = modelLocks.map((lock) => lock.until).join(",");
+  const [hasActiveLock, setHasActiveLock] = useState(false);
+
+  // Whether any lock still benches the account right now (ticks down so the
+  // badge flips the moment the last lock expires). Effect-based so Date.now()
+  // never runs during render.
+  useEffect(() => {
+    const check = () => {
+      setHasActiveLock(modelLocks.some((lock) => new Date(lock.until).getTime() > Date.now()));
+    };
+    check();
+    if (!lockSignature) return;
+    const interval = setInterval(check, 1000);
+    return () => clearInterval(interval);
+    // modelLocks is keyed off lockSignature; a new array each render would
+    // defeat the interval teardown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockSignature]);
 
   // Build providerSpecificData for region-aware providers
   const buildRegionSpecificData = () => {
@@ -110,6 +174,22 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
       setValidationResult("failed");
     } finally {
       setValidating(false);
+    }
+  };
+
+  // Manual override for the gateway's cooldown bookkeeping: when the operator
+  // knows the upstream limit has already reset (the error message names the
+  // reset time), the program's own backoff timer is still benching the account.
+  // `testStatus: "active"` is the canonical re-activation — the connections
+  // repo clears every modelLock_*, backoffLevel, rateLimitedUntil and errorCode
+  // when it sees it (resetHealthStateOnActivation).
+  const handleClearStatus = async () => {
+    if (!connection) return;
+    setClearingStatus(true);
+    try {
+      await onSave({ testStatus: "active" });
+    } finally {
+      setClearingStatus(false);
     }
   };
 
@@ -180,6 +260,20 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
 
   if (!connection) return null;
 
+  // Effective status mirrors the connection row: an expired lock means the row
+  // already shows "active" even though the stored testStatus is still
+  // "unavailable".
+  const statusText = connection.isActive === false ? "disabled" : (connection.testStatus || "Unknown");
+  const effectiveStatus = connection.testStatus === "unavailable" && !hasActiveLock
+    ? "active"
+    : connection.testStatus;
+  const hasErrorState = Boolean(connection.lastError)
+    || connection.testStatus === "unavailable"
+    || Boolean(connection.rateLimitedUntil)
+    || connection.errorCode != null
+    || (connection.backoffLevel || 0) > 0;
+  const hasStatusToClear = modelLocks.length > 0 || hasErrorState;
+
   return (
     <Modal isOpen={isOpen} title="Edit Connection" onClose={onClose}>
       <div className="flex flex-col gap-4">
@@ -201,6 +295,64 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
           value={formData.priority}
           onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value, 10) || 1 })}
         />
+
+        <div className="rounded-lg border border-border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-sm font-medium">Account status</span>
+              <Badge variant={getConnectionStatusVariant(connection.isActive, effectiveStatus)} size="sm" dot>
+                {statusText}
+              </Badge>
+            </div>
+            {hasStatusToClear && (
+              <Button size="sm" variant="secondary" onClick={handleClearStatus} disabled={clearingStatus || saving}>
+                {clearingStatus ? "Clearing..." : "Clear cooldown"}
+              </Button>
+            )}
+          </div>
+          <div className="mt-2 flex flex-col gap-1">
+            {!hasStatusToClear && (
+              <p className="text-xs text-text-muted">
+                No cooldown or backoff — the account is available for requests.
+              </p>
+            )}
+            {modelLocks.map((lock) => (
+              <div key={lock.key} className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-text-muted">
+                  {lock.model === "__all" ? "All models" : lock.model}
+                </span>
+                <LockCountdown until={lock.until} />
+                <span className="text-text-muted">Resets at</span>
+                <span className="text-text-muted font-mono">{new Date(lock.until).toLocaleTimeString()}</span>
+              </div>
+            ))}
+            {connection.lastError && (
+              <p className="text-xs text-red-500 break-words" title={connection.lastError}>
+                {connection.lastError}
+                {connection.lastErrorAt && (
+                  <span className="text-text-muted"> ({getRelativeTime(connection.lastErrorAt)})</span>
+                )}
+              </p>
+            )}
+            {(connection.backoffLevel || 0) > 0 && (
+              <p className="text-xs text-text-muted">
+                <span>Backoff level</span> <span>{connection.backoffLevel}</span>
+              </p>
+            )}
+            {connection.rateLimitedUntil && (
+              <p className="text-xs text-text-muted">
+                <span>Rate limited until</span>{" "}
+                <span>{new Date(connection.rateLimitedUntil).toLocaleString()}</span>
+              </p>
+            )}
+          </div>
+          {hasStatusToClear && (
+            <p className="mt-2 text-xs text-text-muted">
+              Clear cooldown when you know the upstream limit has already reset — the gateway ignores
+              its own backoff timer and routes requests to this account again.
+            </p>
+          )}
+        </div>
 
         {!isOAuth && (
           <>
@@ -287,7 +439,7 @@ export default function EditConnectionModal({ isOpen, connection, onSave, onClos
         )}
 
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+          <Button onClick={handleSubmit} fullWidth disabled={saving || clearingStatus}>{saving ? "Saving..." : "Save"}</Button>
           <Button onClick={onClose} variant="ghost" fullWidth>Cancel</Button>
         </div>
       </div>
@@ -305,8 +457,19 @@ EditConnectionModal.propTypes = {
     authType: PropTypes.string,
     provider: PropTypes.string,
     providerSpecificData: PropTypes.object,
+    testStatus: PropTypes.string,
+    isActive: PropTypes.bool,
+    lastError: PropTypes.string,
+    lastErrorAt: PropTypes.string,
+    errorCode: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    backoffLevel: PropTypes.number,
+    rateLimitedUntil: PropTypes.string,
   }),
   onSave: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
+};
+
+LockCountdown.propTypes = {
+  until: PropTypes.string.isRequired,
 };
 

@@ -1454,4 +1454,14 @@
   "Authorization complete.": "授权完成。",
   "Authorization failed.": "授权失败。",
   "Complete Authorization": "完成授权"
+,
+  "Account status": "账号状态",
+  "Clear cooldown": "解除冷却",
+  "Clearing...": "解除中…",
+  "All models": "所有模型",
+  "Resets at": "重置时间",
+  "Backoff level": "退避等级",
+  "Rate limited until": "限流截止",
+  "No cooldown or backoff — the account is available for requests.": "无冷却或退避 — 该账号可正常参与请求",
+  "Clear cooldown when you know the upstream limit has already reset — the gateway ignores its own backoff timer and routes requests to this account again.": "当你已确认上游限流恢复时，可手动解除冷却 —— 网关会忽略自身退避计时，立即把请求重新路由到该账号"
 }
