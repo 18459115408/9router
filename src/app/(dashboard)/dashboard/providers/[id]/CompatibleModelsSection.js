@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import PropTypes from "prop-types";
-import { Button, Toggle, CapacityBadges } from "@/shared/components";
+import { Button, Toggle } from "@/shared/components";
 import { CAPACITY_META } from "@/shared/constants/models";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
-
-const defaultCaps = () => Object.fromEntries(Object.keys(CAPACITY_META).map((key) => [key, false]));
 
 function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting, caps, onToggleCap }) {
   const borderColor = testStatus === "ok"
@@ -64,7 +62,8 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
           )}
         </div>
         {onToggleCap && (
-          <div className="flex flex-wrap items-center gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-4 mt-2">
+            <span className="text-[11px] text-text-muted">Capabilities</span>
             {Object.entries(CAPACITY_META).map(([key, meta]) => (
               <Toggle
                 key={key}
@@ -90,7 +89,6 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
 
 export default function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, modelAliases, customModels, copied, onCopy, onDeleteAlias, onAddCustomModel, onDeleteCustomModel, onToggleModelCap, connections, isAnthropic }) {
   const [newModel, setNewModel] = useState("");
-  const [newCaps, setNewCaps] = useState(defaultCaps);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [testingModelId, setTestingModelId] = useState(null);
@@ -139,9 +137,10 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
 
     setAdding(true);
     try {
-      await onAddCustomModel(modelId, newCaps);
+      // No caps on add: the new row's own toggles below are where capabilities
+      // are declared, so the form stays a single "type an id and press Add".
+      await onAddCustomModel(modelId);
       setNewModel("");
-      setNewCaps(defaultCaps());
     } catch (error) {
       console.log("Error adding model:", error);
     } finally {
@@ -213,25 +212,6 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
           {importing ? "Importing..." : "Import from /models"}
         </Button>
       </div>
-
-      <div className="flex flex-wrap items-center gap-4">
-        <span className="text-xs text-text-muted">Capabilities for the model being added:</span>
-        {Object.entries(CAPACITY_META).map(([key, meta]) => (
-          <Toggle
-            key={key}
-            checked={!!newCaps[key]}
-            onChange={(v) => setNewCaps((prev) => ({ ...prev, [key]: v }))}
-            label={meta.label}
-            description={meta.desc}
-            size="sm"
-          />
-        ))}
-      </div>
-      <p className="text-xs text-text-muted -mt-2">
-        Declared here, the gateway forwards matching content instead of replacing it with a
-        placeholder — an unknown model is treated as text-only until you say otherwise.
-        Unchecking never disables a capability the built-in tables already know about.
-      </p>
 
       {!canImport && (
         <p className="text-xs text-text-muted">
