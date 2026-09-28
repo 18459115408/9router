@@ -53,17 +53,16 @@ describe("unified model-config store", () => {
     expect(getStoredConfig(null, "deepseek-flash")).toBeNull();
   });
 
-  it("persists the full config, not just the modality subset", async () => {
+  it("persists the full capability config, not just the modality subset", async () => {
     await upsertModelConfig({
       providerAlias: PROBE, id: "t-caps",
       caps: {
         vision: true, pdf: true, audioInput: true, videoInput: true,
         imageOutput: true, audioOutput: true, search: true, tools: false, reasoning: true,
         contextWindow: 1000000, maxOutput: 65536,
-        targetFormat: "claude", upstreamModelId: "u", supportedFormats: ["openai"], strip: ["reasoning_effort"], quotaFamily: "plan",
         thinkingFormat: "step", thinkingCanDisable: false, thinkingRange: { min: 1024, max: 65536 },
         thinkingEffortSupported: true, thinkingLevels: ["low", "medium", "high"],
-        thinkingMapping: { low: { my_knob: "low" } }, quirks: { forceStream: true },
+        thinkingMapping: { low: { my_knob: "low" } },
       },
     });
     // Read straight back off the synchronous snapshot — this is what the
@@ -72,26 +71,42 @@ describe("unified model-config store", () => {
       vision: true, pdf: true, audioInput: true, videoInput: true,
       imageOutput: true, audioOutput: true, search: true, tools: false, reasoning: true,
       contextWindow: 1000000, maxOutput: 65536,
-      targetFormat: "claude", upstreamModelId: "u", supportedFormats: ["openai"], strip: ["reasoning_effort"], quotaFamily: "plan",
       thinkingFormat: "step", thinkingCanDisable: false, thinkingRange: { min: 1024, max: 65536 },
       thinkingEffortSupported: true, thinkingLevels: ["low", "medium", "high"],
-      thinkingMapping: { low: { my_knob: "low" } }, quirks: { forceStream: true },
+      thinkingMapping: { low: { my_knob: "low" } },
     });
+  });
+
+  it("drops transport fields — routing stays registry-owned", async () => {
+    // The row is the capability answer. How a request reaches the upstream
+    // (target format, upstream id, supported formats, strip list, quota family,
+    // provider quirks) is the registry's to carry, and a row that carried it
+    // would make the executor/translator choice depend on stored state — while
+    // nothing at request time reads it, so it would be saved decoration.
+    await upsertModelConfig({
+      providerAlias: PROBE, id: "t-transport",
+      caps: {
+        vision: true,
+        targetFormat: "claude", upstreamModelId: "u", supportedFormats: ["openai"],
+        strip: ["reasoning_effort"], quotaFamily: "plan", quirks: { forceStream: true },
+      },
+    });
+    expect(getStoredConfig(PROBE, "t-transport").caps).toEqual({ vision: true });
   });
 
   it("merges patches without clobbering unrelated fields", async () => {
     await upsertModelConfig({ providerAlias: PROBE, id: "t-legacy", caps: { vision: true, contextWindow: 500000 } });
-    await upsertModelConfig({ providerAlias: PROBE, id: "t-legacy", caps: { contextWindow: 1000000, targetFormat: "openai" } });
-    expect(getStoredConfig(PROBE, "t-legacy").caps).toEqual({ vision: true, contextWindow: 1000000, targetFormat: "openai" });
+    await upsertModelConfig({ providerAlias: PROBE, id: "t-legacy", caps: { contextWindow: 1000000, pdf: true } });
+    expect(getStoredConfig(PROBE, "t-legacy").caps).toEqual({ vision: true, contextWindow: 1000000, pdf: true });
   });
 
   it("treats null as delete, so a field can be turned back off", async () => {
-    await upsertModelConfig({ providerAlias: PROBE, id: "t-nulls", caps: { vision: true, contextWindow: 500000, targetFormat: "claude", thinkingFormat: "step" } });
+    await upsertModelConfig({ providerAlias: PROBE, id: "t-nulls", caps: { vision: true, contextWindow: 500000, pdf: true, thinkingFormat: "step" } });
     await upsertModelConfig({ providerAlias: PROBE, id: "t-nulls", caps: { contextWindow: null } });
-    expect(getStoredConfig(PROBE, "t-nulls").caps).toEqual({ vision: true, targetFormat: "claude", thinkingFormat: "step" });
+    expect(getStoredConfig(PROBE, "t-nulls").caps).toEqual({ vision: true, pdf: true, thinkingFormat: "step" });
     // Deleting every field removes the caps block but keeps the row, so the
     // operator's registration and its provenance survive.
-    await upsertModelConfig({ providerAlias: PROBE, id: "t-nulls", caps: { vision: null, targetFormat: null, thinkingFormat: null } });
+    await upsertModelConfig({ providerAlias: PROBE, id: "t-nulls", caps: { vision: null, pdf: null, thinkingFormat: null } });
     const row = getStoredConfig(PROBE, "t-nulls");
     expect(row).toMatchObject({ id: "t-nulls", source: "operator" });
     expect(row.caps).toBeUndefined();
@@ -127,6 +142,7 @@ describe("unified model-config store", () => {
         vision: true, contextWindow: -5, maxOutput: 0, thinkingFormat: "bogus",
         thinkingLevels: ["low", "nope"], search: "yes", targetFormat: 42,
         thinkingRange: { min: 1024, max: -1 }, unknownField: "x",
+        upstreamModelId: "u", quirks: { forceStream: true },
       },
     });
     expect(c.caps).toEqual({ vision: true, thinkingLevels: ["low"], thinkingRange: { min: 1024 } });

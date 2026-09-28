@@ -54,8 +54,13 @@ function mergeCaps(prev, patch) {
   return Object.keys(next).length ? next : null;
 }
 
-export async function getModelConfigs() {
-  return await getAllConfigs();
+// `fresh: true` bypasses the short-lived cache and reads the DB. Used by the
+// snapshot refresh after a write: going through the cache would hand back the
+// pre-write rows and the refresh would silently restore stale data. A caller
+// that is about to write based on what it reads (the API route's lock check)
+// needs it for the same reason.
+export async function getModelConfigs({ fresh = false } = {}) {
+  return await getAllConfigs({ fresh });
 }
 
 // Atomic upsert inside transaction to prevent duplicate races. Re-adding an

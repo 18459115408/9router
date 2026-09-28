@@ -49,7 +49,11 @@ describe("suggestModelConfig", () => {
     // deepseek-v4-pro-none maps to upstream deepseek-v4-pro in the registry.
     const s = suggestModelConfig("deepseek", "deepseek-v4-pro-none");
     expect(s.routing.upstreamModelId).toBe("deepseek-v4-pro");
-    expect(s.provenance.upstreamModelId).toBe("registry");
+    // Informational only. Routing describes how the request will be routed and
+    // is never proposed as a savable cap — a pre-fill that silently fails to
+    // persist is worse than no pre-fill at all.
+    expect(s.caps.upstreamModelId).toBeUndefined();
+    expect(s.provenance.upstreamModelId).toBeUndefined();
   });
 
   it("marks the provider's own strip list when the registry declares one", () => {

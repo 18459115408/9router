@@ -66,12 +66,11 @@ describe("unified config overrides the built-in tables", () => {
     expect(getCapabilitiesForModel(PROBE, "step-5-preview").contextWindow).toBe(128000);
   });
 
-  it("carries thinking config and quirks through to the picker", async () => {
+  it("carries thinking config and limits through to the picker", async () => {
     await upsertModelConfig({
       providerAlias: PROBE, id: "t-override", caps: {
         reasoning: true, thinkingFormat: "step", thinkingCanDisable: false,
         thinkingLevels: ["low", "high"], contextWindow: 512000, maxOutput: 32000,
-        targetFormat: "claude", upstreamModelId: "up-x", quirks: { forceStream: true },
       },
     });
     const c = getCapabilitiesForModel(PROBE, "t-override");
@@ -79,9 +78,30 @@ describe("unified config overrides the built-in tables", () => {
     expect(c.thinkingCanDisable).toBe(false);
     expect(c.contextWindow).toBe(512000);
     expect(c.maxOutput).toBe(32000);
-    expect(c.quirks).toEqual({ forceStream: true });
     // `none` is dropped because the row says thinking cannot be disabled.
     expect(getThinkingLevels(PROBE, "t-override")).toEqual(["low", "high"]);
+  });
+
+  it("does not let a row's stored transport leak onto the resolved caps", () => {
+    // Rows written by a build that still accepted routing keys carry them. The
+    // overlay must drop them: the caps object is published by GET /v1/models,
+    // so anything it carries becomes part of the public model list. Simulated
+    // with a fake reader — mutating a real row here would poison the snapshot
+    // the rest of the file reads.
+    setModelConfigSource({
+      getConfig: (_provider, model) => (model === "t-transport-leak"
+        ? { source: "operator", caps: { vision: true, targetFormat: "claude", upstreamModelId: "up-x", quirks: { forceStream: true } } }
+        : null),
+    });
+    try {
+      const c = getCapabilitiesForModel(PROBE, "t-transport-leak");
+      expect(c.vision).toBe(true);
+      expect(c.targetFormat).toBeUndefined();
+      expect(c.upstreamModelId).toBeUndefined();
+      expect(c.quirks).toBeUndefined();
+    } finally {
+      setModelConfigSource({ getConfig: getStoredConfig });
+    }
   });
 
   it("leaves a model with no saved row on exactly the built-in tables", async () => {

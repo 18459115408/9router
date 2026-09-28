@@ -23,11 +23,14 @@ import { getCatalogModalities, getCatalogLimits } from "./catalogOverride.js";
 // actionable downstream. `tools`/`search`/`imageOutput`/`audioOutput` are
 // display-only capabilities with no editor, so proposing them would write a
 // value nobody can see or change.
+// Caps a suggestion may propose — the capability keys a row can actually carry.
+// Routing keys are deliberately absent: they cannot be saved on a row (the
+// registry owns transport), so proposing them would pre-fill values that
+// silently fail to persist.
 const PROPOSABLE_CAPS = [
   "vision", "pdf", "audioInput", "videoInput", "reasoning",
   "contextWindow", "maxOutput",
   "thinkingFormat", "thinkingCanDisable", "thinkingLevels", "thinkingEffortSupported",
-  "targetFormat", "upstreamModelId", "supportedFormats", "strip", "quotaFamily",
 ];
 
 // Which layer supplied each field, so the UI can say where the pre-fill came
@@ -107,6 +110,10 @@ export function suggestModelConfig(providerAlias, modelId, opts = {}) {
   //    `modelQuotaFamily` falls back to MODEL_DEFAULTS.quotaFamily. Treating
   //    either as an opinion would make every unrecognized model look configured,
   //    so each is accepted only when it differs from that fallback.
+  //
+  //    Returned for information only — it describes how this request will be
+  //    routed, not anything a saved row can change. Nothing persists it, so it
+  //    never enters `proposedCaps`.
   const routing = {};
   const targetFormat = getModelTargetFormat(providerAlias, base);
   if (targetFormat) routing.targetFormat = targetFormat;
@@ -123,7 +130,10 @@ export function suggestModelConfig(providerAlias, modelId, opts = {}) {
   const proposedCaps = {};
   const provenance = {};
   // Tables win over catalog: the hand-written tables are the curated layer, the
-  // catalog only fills gaps. Routing always comes from the registry.
+  // catalog only fills gaps. `routing` is not consulted here — it describes
+  // transport the registry owns and a row cannot carry, so it must never enter
+  // the proposed caps (a pre-fill that silently fails to persist is worse than
+  // no pre-fill).
   for (const key of PROPOSABLE_CAPS) {
     if (fromTables[key] !== undefined) {
       proposedCaps[key] = fromTables[key];
@@ -131,9 +141,6 @@ export function suggestModelConfig(providerAlias, modelId, opts = {}) {
     } else if (fromCatalog[key] !== undefined) {
       proposedCaps[key] = fromCatalog[key];
       provenance[key] = "catalog";
-    } else if (routing[key] !== undefined) {
-      proposedCaps[key] = routing[key];
-      provenance[key] = "registry";
     }
   }
 

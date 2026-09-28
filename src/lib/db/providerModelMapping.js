@@ -15,18 +15,20 @@
 
 import { sanitizeCaps } from "./modelConfigSchema.js";
 
-// Only the fields a provider plausibly reports and the schema can carry. A
-// capability the provider did not mention stays absent, so the built-in tables
-// still fill it — importing must never overwrite a model's real behaviour with
-// a partial view.
+// Only the capability fields a provider plausibly reports and the schema can
+// carry. A capability the provider did not mention stays absent, so the
+// built-in tables still fill it — importing must never overwrite a model's
+// real behaviour with a partial view. Transport (target format, upstream id,
+// supported formats, strip list, quota family, provider quirks) is deliberately
+// not mapped even when a provider names one of our own field names: routing is
+// the registry's to carry, and a row that overrode it would make the executor
+// choice depend on stored state.
 const KNOWN = new Set([
   "vision", "pdf", "audioInput", "videoInput", "imageOutput", "audioOutput",
   "search", "tools", "reasoning",
   "contextWindow", "maxOutput",
   "thinkingFormat", "thinkingCanDisable", "thinkingRange",
   "thinkingEffortSupported", "thinkingLevels", "thinkingMapping",
-  "targetFormat", "upstreamModelId", "supportedFormats", "strip", "quotaFamily",
-  "quirks",
 ]);
 
 // Effort levels a provider reports, normalized to the schema's vocabulary.
@@ -134,10 +136,6 @@ export function mapProviderModelConfig(model) {
       if (key === "contextWindow" || key === "maxOutput") {
         const n = positiveInt(value);
         if (n !== undefined) out[key] = n;
-        continue;
-      }
-      if (key === "targetFormat" || key === "upstreamModelId" || key === "quotaFamily") {
-        if (value) out[key] = value;
         continue;
       }
       out[key] = value;

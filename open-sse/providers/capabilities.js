@@ -567,6 +567,21 @@ function getModelConfigSource() {
   return (modelConfigSource = globalThis.__9rModelConfigSource || null);
 }
 
+// The keys the unified overlay may write onto the resolved result. Mirrors the
+// schema's capability set (ALL_CAPABILITY_KEYS), which gates every write: the
+// overlay must not become a way to smuggle registry-internal or stale keys onto
+// the caps, because this object is handed to GET /v1/models and clients read
+// it. A row written by a build that still stored routing keys would otherwise
+// publish `targetFormat` / `upstreamModelId` / … to every client listing
+// models. Kept as a local list rather than imported: this module is bundled
+// into the browser and cannot reach the DB layer.
+const UNIFIED_OVERLAY_KEYS = [
+  "reasoning", "vision", "pdf", "audioInput", "videoInput", "imageOutput", "audioOutput",
+  "search", "tools", "contextWindow", "maxOutput",
+  "thinkingFormat", "thinkingCanDisable", "thinkingRange", "thinkingEffortSupported",
+  "thinkingLevels", "thinkingMapping",
+];
+
 // Overlay the unified config's saved fields on top of a table-resolved result.
 // Field-by-field, row-wins: a key present in the row replaces the table value
 // even when it is `false`, and a key the row does not carry is left untouched.
@@ -578,8 +593,8 @@ function applyUnifiedConfig(result, provider, model) {
   if (!caps || typeof caps !== "object") return result;
 
   const next = { ...result };
-  for (const [key, value] of Object.entries(caps)) {
-    next[key] = value;
+  for (const key of UNIFIED_OVERLAY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(caps, key)) next[key] = caps[key];
   }
   return next;
 }

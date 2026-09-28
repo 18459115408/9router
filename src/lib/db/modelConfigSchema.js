@@ -1,5 +1,5 @@
-// Unified model-config schema: the single persisted representation of everything
-// the gateway knows about one (provider, model) pair.
+// Unified model-config schema: the single persisted representation of what the
+// gateway knows about one (provider, model) pair.
 //
 // Before this module, model config lived in five places at once — the
 // capabilities tables, the registry `models` arrays, the pricing tables, the
@@ -7,6 +7,14 @@
 // the request path re-resolved all five on every call. This schema is the one
 // row that carries the whole answer, so `loadModelConfig()` can hand back a
 // complete config from a single lookup.
+//
+// The row is the capability answer: what the model can do and how it thinks.
+// How a request REACHES the upstream (target format, upstream id, supported
+// formats, strip list, quota family, provider quirks) is not here — that is
+// transport knowledge the registry already carries per model, and a
+// model-config row overriding it would make the executor/translator choice
+// depend on stored state. An operator who needs to correct routing edits the
+// registry, where the value is read.
 //
 // Provenance is part of the row, not metadata beside it: `source` decides
 // whether the dashboard lets the row be edited (a provider-supplied config is
@@ -37,11 +45,6 @@ export const THINKING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhi
 // ── Limit fields ─────────────────────────────────────────────────────────
 export const LIMIT_KEYS = ["contextWindow", "maxOutput"];
 
-// ── Routing fields ───────────────────────────────────────────────────────
-// How the request reaches the upstream. These mirror the per-model fields the
-// registry `models` arrays already carry (providers/models/schema.js).
-export const ROUTING_KEYS = ["targetFormat", "upstreamModelId", "supportedFormats", "strip", "quotaFamily"];
-
 // Every capability key a row may carry — the superset of
 // capabilities.DECLARABLE_KEYS (which only covered the modality flags the
 // strip path gates on) and the four thinking fields.
@@ -50,10 +53,8 @@ export const ALL_CAPABILITY_KEYS = [
   ...MODALITY_KEYS,
   ...FEATURE_KEYS,
   ...LIMIT_KEYS,
-  ...ROUTING_KEYS,
   "thinkingFormat", "thinkingCanDisable", "thinkingRange",
   "thinkingEffortSupported", "thinkingLevels", "thinkingMapping",
-  "quirks",
 ];
 
 export const CONFIG_SOURCES = ["builtin", "provider", "operator"];
@@ -121,24 +122,10 @@ export function sanitizeCaps(raw) {
     if (raw[k] !== null && Number.isFinite(n) && n > 0) out[k] = Math.floor(n);
   }
 
-  // Routing: strings (or arrays of strings) only.
-  for (const k of ["targetFormat", "upstreamModelId", "quotaFamily"]) {
-    if (raw[k] === null) out[k] = null;
-    else if (typeof raw[k] === "string" && raw[k]) out[k] = raw[k];
-  }
-  for (const k of ["supportedFormats", "strip"]) {
-    if (raw[k] === null) out[k] = null;
-    else if (Array.isArray(raw[k])) {
-      const vals = raw[k].filter((v) => typeof v === "string" && v);
-      if (vals.length) out[k] = vals;
-    }
-  }
-
-  // Provider quirks: free-form object, validated by the shape of the fields
-  // consumers read (all booleans/strings/arrays), so keep it as-is.
-  if (raw.quirks === null) out.quirks = null;
-  else if (isPlainObject(raw.quirks)) out.quirks = raw.quirks;
-
+  // Routing and provider quirks are deliberately not read here: the row does
+  // not carry transport (see the header note). A caller that still sends one —
+  // an older build's payload, or a hand-written request — has it dropped rather
+  // than stored, exactly like any other unknown key.
   return Object.keys(out).length ? out : null;
 }
 
