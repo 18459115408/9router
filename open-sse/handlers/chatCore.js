@@ -113,7 +113,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (providerThinking?.mode && providerThinking.mode !== "auto") {
     const mode = providerThinking.mode;
     if (mode === "on" && !body.thinking) {
-      console.log("Injecting provider-level thinking config override: on");
+      // Through the request logger like its siblings: this fires on every
+      // request for a provider whose thinking mode is pinned, and a bare
+      // console.log bypasses the log level and cannot be silenced.
+      log?.debug?.("THINK", "Injecting provider-level thinking config override: on");
       body = { ...body, thinking: { type: "enabled", budget_tokens: 10000 } };
     } else if (mode === "off" && !body.thinking) {
       body = { ...body, thinking: { type: "disabled" } };
@@ -289,7 +292,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // RTK: compress tool_result content
   const rtkStats = compressMessages(translatedBody, tokenSaverEnabled && rtkEnabled);
   const rtkLine = formatRtkLog(rtkStats);
-  if (rtkLine) console.log(rtkLine);
+  // Same treatment as the headroom line below: the savings line is diagnostics,
+  // so it goes through the request logger (level-aware) instead of stdout.
+  if (rtkLine) log?.info?.("RTK", rtkLine);
 
   // Headroom: optional external proxy compression; fail open if proxy is absent.
   const headroomDiagnostics = {};

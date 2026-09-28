@@ -145,9 +145,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     }
 
-    // Use shared chatCore
-    const chatSettings = await getSettings();
-    const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
+    // Use shared chatCore. Settings were read once before the account loop
+    // (the requireApiKey check above); reading them again per attempt would
+    // repeat an identical DB read for every account fallback.
+    const providerThinking = (settings.providerThinking || {})[provider] || null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
       modelInfo: { provider, model },
