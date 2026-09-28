@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 20127",
     "dev:webpack": "next dev --webpack --port 20127",
+    "dev:stop": "node scripts/stop-dev.mjs",
     "build": "next build",
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "postbuild:bun": "node scripts/copy-standalone-assets.mjs",
