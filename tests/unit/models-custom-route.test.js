@@ -46,6 +46,13 @@ function post(body) {
 
 const LOCKED_ROW = { providerAlias: "wb", id: "primary-model", type: "llm", source: "provider", caps: { vision: true } };
 
+// The real getModelConfigs() hands back the store as a `alias|id|type` → row
+// object (kv.getAll's shape), not an array — the mock has to match, or the
+// route's Object.values() is tested against a fiction.
+const asStore = (rows) => Object.fromEntries(
+  rows.map((r) => [`${r.providerAlias}|${r.id}|${r.type || "llm"}`, r])
+);
+
 describe("GET /api/models/custom", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,10 +63,10 @@ describe("GET /api/models/custom", () => {
       { providerAlias: "wb", id: "primary-model", type: "llm", name: "primary-model" },
       { providerAlias: "wb", id: "mine", type: "llm", name: "mine" },
     ]);
-    mocks.getModelConfigs.mockResolvedValue([
+    mocks.getModelConfigs.mockResolvedValue(asStore([
       { ...LOCKED_ROW, type: "llm" },
       { providerAlias: "wb", id: "mine", type: "llm", source: "operator" },
-    ]);
+    ]));
 
     const response = await GET();
 
@@ -69,7 +76,7 @@ describe("GET /api/models/custom", () => {
 
   it("leaves a row with no unified config unannotated rather than guessing", async () => {
     mocks.getCustomModels.mockResolvedValue([{ providerAlias: "wb", id: "plain", type: "llm" }]);
-    mocks.getModelConfigs.mockResolvedValue([]);
+    mocks.getModelConfigs.mockResolvedValue(asStore([]));
 
     const response = await GET();
 
@@ -81,13 +88,13 @@ describe("GET /api/models/custom", () => {
 describe("POST /api/models/custom", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getModelConfigs.mockResolvedValue([]);
+    mocks.getModelConfigs.mockResolvedValue(asStore([]));
   });
 
   it("refuses an edit to a locked row that does not unlock it", async () => {
     // The row-list editors used to post caps with no `source`, which made the
     // route's operator default silently re-own every provider-sourced row.
-    mocks.getModelConfigs.mockResolvedValue([LOCKED_ROW]);
+    mocks.getModelConfigs.mockResolvedValue(asStore([LOCKED_ROW]));
 
     const response = await POST(post({ providerAlias: "wb", id: "primary-model", caps: { vision: false } }));
 
@@ -97,7 +104,7 @@ describe("POST /api/models/custom", () => {
   });
 
   it("lets the provider re-publish its own config on a locked row", async () => {
-    mocks.getModelConfigs.mockResolvedValue([LOCKED_ROW]);
+    mocks.getModelConfigs.mockResolvedValue(asStore([LOCKED_ROW]));
 
     const response = await POST(post({ providerAlias: "wb", id: "primary-model", source: "provider", caps: { vision: false } }));
 
@@ -108,7 +115,7 @@ describe("POST /api/models/custom", () => {
   });
 
   it("lets an explicit unlock through", async () => {
-    mocks.getModelConfigs.mockResolvedValue([LOCKED_ROW]);
+    mocks.getModelConfigs.mockResolvedValue(asStore([LOCKED_ROW]));
 
     const response = await POST(post({ providerAlias: "wb", id: "primary-model", source: "operator", caps: {} }));
 

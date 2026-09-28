@@ -41,6 +41,16 @@ describe("unified model-config store", () => {
     expect(getStoredConfig("cl", "deepseek/deepseek-v4.1-flash").source).toBe("builtin");
   });
 
+  it("hands back the store as an alias|id|type-keyed object, not an array", async () => {
+    // kv.getAll()'s shape. The API route's annotation and lock check both read
+    // through it, and a caller that assumes an array silently gets a 500 — it
+    // did, once, because the route test's mock had mocked the wrong shape.
+    await upsertModelConfig({ providerAlias: PROBE, id: "t-shape", caps: { vision: true } });
+    const all = await getModelConfigs();
+    expect(Array.isArray(all)).toBe(false);
+    expect(all[`${PROBE}|t-shape|llm`]).toMatchObject({ id: "t-shape", source: "operator" });
+  });
+
   it("resolves across vendor prefixes, case, and :suffixes", async () => {
     await upsertModelConfig({ providerAlias: "ds", id: "deepseek-flash", caps: { vision: true } });
     expect(getStoredConfig("ds", "vendor/deepseek-flash").id).toBe("deepseek-flash");

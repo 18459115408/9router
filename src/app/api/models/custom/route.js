@@ -73,8 +73,9 @@ function sanitizeUnified(caps) {
 export async function GET() {
   try {
     const models = await getCustomModels();
-    const configs = await getModelConfigs();
-    const byKey = new Map((configs || []).map((c) => [`${c.providerAlias}|${c.id}|${c.type || "llm"}`, c]));
+    // The store is keyed `alias|id|type` → row, so it comes back as an object,
+    // not an array.
+    const byKey = new Map(Object.values(await getModelConfigs()).map((c) => [`${c.providerAlias}|${c.id}|${c.type || "llm"}`, c]));
     const annotated = (models || []).map((model) => {
       const stored = byKey.get(`${model.providerAlias}|${model.id}|${model.type || "llm"}`);
       return stored ? { ...model, source: stored.source, locked: isConfigLocked(stored) } : model;
@@ -107,7 +108,7 @@ export async function POST(request) {
     // go through, so no surface can route around it: on a locked row, only
     // re-publishing the provider's own config or an explicit unlock is allowed.
     const rowType = type || "llm";
-    const existing = (await getModelConfigs({ fresh: true }) || [])
+    const existing = Object.values(await getModelConfigs({ fresh: true }))
       .find((c) => c.providerAlias === providerAlias && c.id === id && (c.type || "llm") === rowType);
     if (isConfigLocked(existing) && source !== "provider" && source !== "operator") {
       return NextResponse.json(
