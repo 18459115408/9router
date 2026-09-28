@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
 import { CapacityBadges } from "@/shared/components";
+import { translate } from "@/i18n/runtime";
 
 export default function ModelRow({ model, fullModel, alias, copied, onCopy, testStatus, isCustom, isFree, onDeleteAlias, onTest, isTesting, onDisable, caps, thinkingSuffix }) {
   const displayModel = thinkingSuffix ? `${fullModel}(${thinkingSuffix})` : fullModel;
@@ -64,7 +65,7 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
           <button
             onClick={onDeleteAlias}
             className="ml-auto rounded p-0.5 text-text-muted opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
-            title="Remove custom model"
+            title={translate("Remove custom model")}
           >
             <span className="material-symbols-outlined text-sm">close</span>
           </button>
@@ -72,7 +73,7 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
           <button
             onClick={onDisable}
             className="ml-auto rounded p-0.5 text-text-muted opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
-            title="Disable this model"
+            title={translate("Disable this model")}
           >
             <span className="material-symbols-outlined text-sm">close</span>
           </button>

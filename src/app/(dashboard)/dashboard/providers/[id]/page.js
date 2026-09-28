@@ -1197,7 +1197,7 @@ export default function ProviderDetailPage() {
                   key={m.id}
                   onClick={() => handleEnableModel(m.id)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                  title="Restore model"
+                  title={translate("Restore model")}
                 >
                   <span className="material-symbols-outlined text-[13px]">add</span>
                   {m.id}
@@ -1550,7 +1550,7 @@ export default function ProviderDetailPage() {
                       icon="cookie"
                       variant="secondary"
                       onClick={() => setShowIFlowCookieModal(true)}
-                      title="Add connection using browser cookie"
+                      title={translate("Add connection using browser cookie")}
                       className="w-full sm:w-auto"
                     >
                       Cookie
@@ -1627,7 +1627,7 @@ export default function ProviderDetailPage() {
               <select
                 value={thinkingMode}
                 onChange={(e) => handleThinkingModeChange(e.target.value)}
-                title="Appends (level) suffix to copied model names"
+                title={translate("Appends (level) suffix to copied model names")}
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs focus:border-primary focus:outline-none"
               >
                 {providerThinkingLevels.map((opt) => (
@@ -1805,7 +1805,7 @@ export default function ProviderDetailPage() {
         isOpen={showAgRiskModal}
         onClose={() => setShowAgRiskModal(false)}
         onConfirm={handleAgRiskConfirm}
-        title="Risk Notice"
+        title={translate("Risk Notice")}
         message={providerInfo?.deprecationNotice}
         confirmText="I Understand, Continue"
         cancelText="Cancel"

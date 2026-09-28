@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatResetTime, getRemainingPercentage } from "./utils";
+import { translate } from "@/i18n/runtime";
 
 const PAGE_SIZE = 10;
 
@@ -247,7 +248,7 @@ export default function QuotaTable({
                   type="button"
                   onClick={() => onHideQuota(quota)}
                   className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5"
-                  title="Hide this quota row"
+                  title={translate("Hide this quota row")}
                   aria-label={`Hide quota ${quota.name}`}
                 >
                   <span className="material-symbols-outlined text-[15px]">

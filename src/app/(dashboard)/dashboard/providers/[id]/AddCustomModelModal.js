@@ -24,7 +24,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
   const [formKey] = useState(() => ++openCount);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Custom Model">
+    <Modal isOpen={isOpen} onClose={onClose} title={translate("Add Custom Model")}>
       <AddCustomModelForm
         key={isOpen ? formKey : "closed"}
         providerAlias={providerAlias}

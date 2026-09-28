@@ -6,6 +6,7 @@ import ProviderIcon from "@/shared/components/ProviderIcon";
 import Badge from "@/shared/components/Badge";
 import QuotaProgressBar from "./QuotaProgressBar";
 import { calculatePercentage } from "./utils";
+import { translate } from "@/i18n/runtime";
 
 const planVariants = {
   free: "default",
@@ -93,7 +94,7 @@ export default function ProviderLimitCard({
           onClick={handleRefresh}
           disabled={refreshing || loading}
           className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Refresh quota"
+          title={translate("Refresh quota")}
         >
           <span
             className={`material-symbols-outlined text-[20px] text-text-muted ${

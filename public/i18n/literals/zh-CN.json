@@ -1476,5 +1476,8 @@
   "No models returned from /models.": "/models 端点未返回任何模型",
   "No new models were added.": "没有新增任何模型",
   "Failed to unlock model config": "解锁模型配置失败",
-  "Locked — mirrors the provider's config": "已锁定 — 镜像 provider 的配置，请在添加模型表单中解锁"
+  "Locked — mirrors the provider's config": "已锁定 — 镜像 provider 的配置，请在添加模型表单中解锁",
+  "Appends (level) suffix to copied model names": "复制的模型名附带 (level) 后缀",
+  "Hide this quota row": "隐藏此配额行",
+  "Show this quota row": "显示此配额行"
 }

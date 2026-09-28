@@ -93,7 +93,7 @@ function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias,
       <button
         onClick={onDeleteAlias}
         className="p-1 hover:bg-red-50 rounded text-red-500"
-        title="Remove model"
+        title={translate("Remove model")}
       >
         <span className="material-symbols-outlined text-sm">delete</span>
       </button>
