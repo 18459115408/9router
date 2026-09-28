@@ -14,13 +14,16 @@ import { isSubscriptionCredentials } from "../../utils/accountType.js";
 const CLAUDE_OAUTH_TOOL_PREFIX = "";
 
 // Convert OpenAI request to Claude format
-export function openaiToClaudeRequest(model, body, stream, credentials = null) {
+export function openaiToClaudeRequest(model, body, stream, credentials = null, provider = null) {
   // Tool name mapping for Claude OAuth (capitalizedName → originalName)
   const toolNameMap = new Map();
   // Cap max_tokens at the model's real output ceiling (e.g. Opus 4.8 = 128000),
   // not the conservative 64000 default — otherwise a high-output model is
   // pre-clamped here before prepareClaudeRequest's model-aware step runs.
-  const modelCeiling = getCapabilitiesForModel(null, model).maxOutput || undefined;
+  // `provider` must be threaded through so the unified config — which is keyed
+  // by (provider, model) — is consulted; passing null here silently drops back
+  // to the built-in tables and would clamp against a stale ceiling.
+  const modelCeiling = getCapabilitiesForModel(provider, model).maxOutput || undefined;
   const result = {
     model: model,
     max_tokens: adjustMaxTokens(body, modelCeiling),

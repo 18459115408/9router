@@ -15,6 +15,12 @@ export async function register() {
     const { installCustomCapsSource } = await import("open-sse/providers/customCapsOverride.js");
     await installCustomCapsSource();
 
+    // Unified model-config store. Same reader mechanism, but authoritative: a
+    // saved field overrides the built-in tables outright, including a `false`.
+    // Installed after the declared-caps source so it supersedes it.
+    const { installModelConfigSource } = await import("open-sse/providers/modelConfigOverride.js");
+    await installModelConfigSource();
+
     const { startModelCatalogSync } = await import("@/lib/modelCatalog/sync.js");
     startModelCatalogSync();
 

@@ -59,7 +59,9 @@ function normalizeZedProvider(value, model) {
 
 function buildProviderRequest(provider, model, body, stream, credentials) {
   if (provider === ZED_PROVIDER.anthropic) {
-    return openaiToClaudeRequest(model, body, true, credentials);
+    // Pass Zed's provider id so the max_tokens ceiling resolves against the
+    // unified config rather than falling back to the built-in tables.
+    return openaiToClaudeRequest(model, body, true, credentials, "zed");
   }
   if (provider === ZED_PROVIDER.google) {
     const geminiRequest = openaiToGeminiRequest(model, body, true);

@@ -272,6 +272,10 @@ export async function compressWithHeadroom(body, { enabled, url, model, format, 
       }
       const data = await callCompress(url, oai.messages, model, timeoutMs, compressUserMessages, diagnostics || {});
       if (!data) return null;
+      // No provider in scope here — this path works off the body's shape alone.
+      // The ceiling therefore falls back to the built-in tables; the request
+      // path's own openai→claude translation, which does have the provider, is
+      // what the outbound body's max_tokens comes from.
       const claudeBody = openaiToClaudeRequest(model, { ...oai, messages: data.messages }, false);
       if (Array.isArray(claudeBody?.messages)) body.messages = claudeBody.messages;
       if (claudeBody?.system !== undefined) body.system = claudeBody.system;

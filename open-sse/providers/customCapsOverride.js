@@ -26,7 +26,10 @@ import { setCustomCapsSource, DECLARABLE_KEYS } from "./capabilities.js";
 // `qoder`, `deepseek`). Neither direction is derivable from the other alone —
 // `ds` lives in the registry's `aliases[]`, not in `alias` — so index all of
 // them.
-function buildAliasIndex(registry) {
+// Exported so the unified-config bootstrap (modelConfigOverride.js) indexes its
+// rows under the same spellings this module does, rather than growing a second
+// alias table that can drift from this one.
+export function buildAliasIndex(registry) {
   const index = new Map();
   const add = (name, id) => {
     if (name && !index.has(name)) index.set(name, id);

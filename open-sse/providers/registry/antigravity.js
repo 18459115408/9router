@@ -21,6 +21,9 @@ export default {
   transport: {
     baseUrls: [ANTIGRAVITY_IDE_BASE_URL],
     format: "antigravity",
+    // Image-gen models must go out non-streaming: this endpoint shape has no
+    // streaming equivalent (v1internal:generateContent).
+    quirks: { forceNonStreamForImageGen: true },
     headers: {
       "User-Agent": ANTIGRAVITY_IDE_USER_AGENT,
     },

@@ -538,6 +538,52 @@ function getCustomCapsSource() {
   return (customCapsSource = globalThis.__9rCustomCapsSource || null);
 }
 
+// The unified model-config store (kv scope `modelConfigs`). Same reader shape
+// and same globalThis slot as the declared-caps source above, because this
+// module is bundled into the browser too and cannot import the DB layer.
+//
+// Unlike `applyDeclaredCaps`, this overlay is AUTHORITATIVE: a field the row
+// carries wins over the built-in tables outright, including a `false`. The
+// declared-caps overlay could only ever turn a modality on — that is exactly
+// why an operator could not turn one off, or correct the context window, on a
+// model the hand-written tables guessed wrong. A row that carries no opinion
+// on a field leaves it alone, so the tables still fill everything an operator
+// never touched (which is the case for the 459 registration rows that carry no
+// caps at all).
+let modelConfigSource = null;
+
+/**
+ * Install the unified-config reader (server only).
+ * @param {{ getConfig: (provider: string|null, model: string) => object|null } | null} source
+ */
+export function setModelConfigSource(source) {
+  modelConfigSource = source;
+  if (typeof globalThis !== "undefined") globalThis.__9rModelConfigSource = source;
+}
+
+function getModelConfigSource() {
+  if (modelConfigSource) return modelConfigSource;
+  if (typeof globalThis === "undefined") return null;
+  return (modelConfigSource = globalThis.__9rModelConfigSource || null);
+}
+
+// Overlay the unified config's saved fields on top of a table-resolved result.
+// Field-by-field, row-wins: a key present in the row replaces the table value
+// even when it is `false`, and a key the row does not carry is left untouched.
+// Applied last, so it supersedes both the tables and the declared-caps overlay.
+function applyUnifiedConfig(result, provider, model) {
+  const row = getModelConfigSource()?.getConfig(provider, model);
+  if (!row) return result;
+  const caps = row.caps;
+  if (!caps || typeof caps !== "object") return result;
+
+  const next = { ...result };
+  for (const [key, value] of Object.entries(caps)) {
+    next[key] = value;
+  }
+  return next;
+}
+
 // Keys an operator declaration may set, and the only ones this module will act
 // on. `vision`/`pdf`/`audioInput`/`videoInput` are exactly what
 // stripUnsupportedModalities() gates on; `reasoning` drives thinking handling.
@@ -659,7 +705,12 @@ function isCommandCodeTextOnly(model) {
   }
   return false;
 }
-export function getCapabilitiesForModel(provider, model) {
+// Resolve from the built-in tables only (provider → exact → pattern → floor),
+// plus the declared-caps and catalog overlays the chain already applied.
+// The unified-config overlay is deliberately NOT here: it runs in the exported
+// wrapper below so it reaches every exit path, including the commandcode branch
+// that returns early and would otherwise bypass it.
+function resolveFromTables(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
 
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
@@ -702,4 +753,14 @@ export function getCapabilitiesForModel(provider, model) {
 
   // 4. Floor
   return refine(null, provider, model);
+}
+
+// Resolve capabilities for a model. The built-in tables answer first; a row in
+// the unified model-config store then overrides whatever fields it carries.
+// That ordering is the whole contract: the tables still fill everything an
+// operator never saved, and a saved field wins over the tables — including a
+// `false`, which the old declared-caps overlay could not express.
+export function getCapabilitiesForModel(provider, model) {
+  const resolved = resolveFromTables(provider, model);
+  return applyUnifiedConfig(resolved, provider, model);
 }

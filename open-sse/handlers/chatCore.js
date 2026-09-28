@@ -30,6 +30,7 @@ import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
+import { applyCodexPassthroughThinking } from "../providers/codexPassthrough.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 
 /**
@@ -125,16 +126,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true;
   let stream = providerRequiresStreaming ? true : (body.stream !== false);
 
-  // Image generation models require non-streaming (Google v1internal:generateContent)
+  // Image generation models require non-streaming (Google v1internal:generateContent).
+  // Which providers need it is a property of their endpoint, not of the model
+  // name, so they declare it: `transport.quirks.forceNonStreamForImageGen`.
   const modelType = getModelType(alias, model);
   const isImageGenModel = modelType === "imageGen" || /image|imagen|image-generation/i.test(model);
-  if (isImageGenModel && (provider === "antigravity" || provider === "gemini-cli")) {
+  if (isImageGenModel && PROVIDERS[provider]?.quirks?.forceNonStreamForImageGen === true) {
     stream = false;
   }
 
   // DeepSeek-TUI: interactive TUI panel sends stream:true and needs SSE.
   // Non-interactive mode (-p flag) sends without stream and can't parse SSE.
   // Only force non-streaming when client didn't explicitly request it.
+  //
+  // Deliberately a client rule, not a provider quirk: it keys off the caller's
+  // User-Agent, and no provider is involved in the decision. Pushing it into
+  // transport.quirks would make a provider claim a behaviour that belongs to
+  // whatever client happens to be talking to it.
   const detectedTool = detectClientTool(clientRawRequest?.headers || {}, body);
   if (detectedTool === "deepseek-tui" && body.stream !== true) stream = false;
 
@@ -194,17 +202,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (passthrough) {
     log?.debug?.("PASSTHROUGH", `${clientTool} → ${provider} | native lossless`);
     translatedBody = { ...body, model: stripThinkingSuffix(upstreamModel) };
+    // Wire-shape fixups belong to the provider that owns the shape. Codex's is
+    // a body rewrite, not a declarative switch, so it lives with codex and the
+    // orchestrator just calls it.
     if (provider === "codex") {
-      const suffixThinking = {};
-      applyThinking(sourceFormat, upstreamModel, suffixThinking, provider);
-      if (suffixThinking.reasoning_effort) {
-        const reasoning = translatedBody.reasoning;
-        translatedBody.reasoning = {
-          ...(reasoning && typeof reasoning === "object" && !Array.isArray(reasoning) ? reasoning : {}),
-          effort: suffixThinking.reasoning_effort,
-        };
-        delete translatedBody.reasoning_effort;
-      }
+      translatedBody = applyCodexPassthroughThinking(translatedBody, sourceFormat, upstreamModel, provider);
     }
     // Normalize newer Cowork/CC beta shapes (adaptive thinking, mid-conversation system) the API rejects
     if (clientTool === "claude") normalizeClaudePassthrough(translatedBody, translatedBody.model);
@@ -264,8 +266,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log.line(reqTag, "▶", parts.join(" · "));
   }
 
-  // TTS models don't support tool messages/function calling
-  if (getModelType(alias, model) === "tts" && translatedBody.messages) {
+  // TTS models don't support tool messages/function calling. Reuse the kind
+  // already resolved above rather than reading the registry a second time.
+  if (modelType === "tts" && translatedBody.messages) {
     translatedBody.messages = translatedBody.messages.filter(msg => msg.role !== "tool");
     delete translatedBody.tools;
   }
@@ -332,6 +335,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Pin cache breakpoints to the final body — every saver above can reshape
   // system/tools/messages, and a stale anchor costs a full prefix rewrite.
+  //
+  // Gated on the wire format, not the provider: Claude-format passthrough needs
+  // its breakpoints re-anchored after the savers moved content around, whatever
+  // upstream it is headed to.
   if (passthrough && clientTool === "claude") anchorClaudeCache(translatedBody);
 
   const executor = getExecutor(provider);
