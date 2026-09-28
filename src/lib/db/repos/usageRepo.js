@@ -14,7 +14,17 @@ function maskApiKey(key) {
 const PENDING_TIMEOUT_MS = 60 * 1000;
 const RING_CAP = 50;
 const CONN_CACHE_TTL_MS = 30 * 1000;
+const DEFAULT_HISTORY_CAP = 50000;
 const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
+
+// How much usage history one instance keeps. An install-level policy rather
+// than a dashboard setting: the table is the operator's own request log and
+// its size should follow the box's disk and sync budget, not a per-session
+// preference.
+function getHistoryCap() {
+  const configured = Number(process.env.USAGE_HISTORY_MAX_RECORDS);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : DEFAULT_HISTORY_CAP;
+}
 
 // In-memory state shared across Next.js modules
 if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} };
@@ -242,6 +252,21 @@ export async function saveRequestUsage(entry) {
           stringifyJson(tokens), stringifyJson({}),
         ]
       );
+
+      // Retention. Nothing else trims this table, so a personal install's own
+      // traffic accumulates forever — and every Baidu snapshot re-reads and
+      // re-uploads all of it. Cap it the way requestDetails does, at a size
+      // that suits one operator's usage; the prune rides the same transaction
+      // as the insert that pushed the count over the line. Rows are small, so
+      // the default is generous: months of daily use.
+      const cap = getHistoryCap();
+      const count = db.get(`SELECT COUNT(*) as c FROM usageHistory`);
+      if (count && count.c > cap) {
+        db.run(
+          `DELETE FROM usageHistory WHERE id IN (SELECT id FROM usageHistory ORDER BY timestamp ASC LIMIT ?)`,
+          [count.c - cap]
+        );
+      }
 
       const dateKey = getLocalDateKey(entry.timestamp);
       const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
