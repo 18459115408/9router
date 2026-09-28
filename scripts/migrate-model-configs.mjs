@@ -10,13 +10,22 @@
 //      back to the pre-migration state.
 //   4. It prints a per-row report so the operator can see exactly what moved.
 //
+// It opens the database through the app's own driver chain (bun:sqlite →
+// better-sqlite3 → node:sqlite → sql.js), not better-sqlite3 directly: the
+// runtime deliberately skips better-sqlite3 on Bun and on Node ≥ 24 because the
+// native addon crashes there, and it is an optional dependency an install may
+// not have built at all. Going through getAdapter() also guarantees the
+// migrations that create the `kv` table have already run. (The server now
+// performs this lift itself on first boot, so this script is the audit /
+// --force path.)
+//
 // Usage:
 //   node scripts/migrate-model-configs.mjs            # dry run by default
 //   node scripts/migrate-model-configs.mjs --write    # perform the copy
 
-import sqlite3 from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
+import { getAdapter } from "../src/lib/db/driver.js";
 import { sanitizeModelConfig, inferSource } from "../src/lib/db/modelConfigSchema.js";
 import { getDataDir } from "../src/lib/dataDir.js";
 
@@ -31,22 +40,26 @@ if (!fs.existsSync(dbPath)) {
   process.exit(1);
 }
 
-// Open read-write: the migration itself is a write, but only ever into the new
-// scope. A read-only handle would force a second connection.
-const db = new sqlite3(dbPath);
+// The adapter interface is get/all/run plus transaction — one call shape for
+// every driver, which is why this no longer pins a specific SQLite binding.
+const db = await getAdapter();
 
-const legacyRows = db.prepare(`SELECT key, value FROM kv WHERE scope = 'customModels'`).all();
-const existingRows = db.prepare(`SELECT key FROM kv WHERE scope = 'modelConfigs'`).all();
+const legacyRows = db.all(`SELECT key, value FROM kv WHERE scope = 'customModels'`);
+const existingRows = db.all(`SELECT key FROM kv WHERE scope = 'modelConfigs'`);
 const existingKeys = new Set(existingRows.map((r) => r.key));
 
 console.log(`DB: ${dbPath}`);
 console.log(`legacy customModels rows: ${legacyRows.length} | existing modelConfigs rows: ${existingKeys.size}`);
 console.log(`mode: ${WRITE ? "WRITE" : "DRY RUN"}${FORCE ? " (force)" : ""}\n`);
 
-const report = { imported: 0, skippedInvalid: 0, skippedExisting: 0, skippedNoChange: 0 };
+const report = { imported: 0, skippedInvalid: 0, skippedExisting: 0 };
 const details = [];
 
-const doCopy = db.transaction(() => {
+// The adapter's transaction() runs the function immediately (better-sqlite3's
+// returns a callable — one of the reasons the script goes through the adapter
+// interface rather than a driver's own API). A throw inside the transaction
+// rolls the whole copy back, which the catch below reports.
+const doCopy = () => db.transaction(() => {
   for (const row of legacyRows) {
     let parsed = null;
     try {
@@ -83,7 +96,7 @@ const doCopy = db.transaction(() => {
     // absent — it must never clear a field an operator set here.
     let capsToWrite = clean.caps || null;
     if (FORCE && existingKeys.has(targetKey)) {
-      const current = db.prepare(`SELECT value FROM kv WHERE scope = 'modelConfigs' AND key = ?`).get(targetKey);
+      const current = db.get(`SELECT value FROM kv WHERE scope = 'modelConfigs' AND key = ?`, [targetKey]);
       const currentCaps = current ? (JSON.parse(current.value)?.caps || null) : null;
       if (currentCaps && capsToWrite) {
         const merged = { ...capsToWrite };
@@ -106,9 +119,8 @@ const doCopy = db.transaction(() => {
     });
 
     if (WRITE) {
-      db.prepare(`INSERT INTO kv(scope, key, value) VALUES('modelConfigs', ?, ?)
-                  ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value`)
-        .run(targetKey, value);
+      db.run(`INSERT INTO kv(scope, key, value) VALUES('modelConfigs', ?, ?)
+              ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value`, [targetKey, value]);
     }
     report.imported++;
     details.push({
@@ -138,8 +150,8 @@ if (WRITE) {
   // Post-condition: the legacy scope must be byte-identical to before, and the
   // new row count must match what we report. A mismatch means the transaction
   // did something it should not have.
-  const legacyAfter = db.prepare(`SELECT COUNT(*) c FROM kv WHERE scope = 'customModels'`).get().c;
-  const newAfter = db.prepare(`SELECT COUNT(*) c FROM kv WHERE scope = 'modelConfigs'`).get().c;
+  const legacyAfter = db.get(`SELECT COUNT(*) c FROM kv WHERE scope = 'customModels'`).c;
+  const newAfter = db.get(`SELECT COUNT(*) c FROM kv WHERE scope = 'modelConfigs'`).c;
   console.log(`post: customModels=${legacyAfter} (was ${legacyRows.length}) modelConfigs=${newAfter} (was ${existingKeys.size})`);
   if (legacyAfter !== legacyRows.length) {
     console.error("FAIL: legacy row count changed — aborting expectation of rollback safety");
@@ -153,5 +165,3 @@ if (WRITE) {
 } else {
   console.log("\nDry run only. Re-run with --write to perform the copy.");
 }
-
-db.close();
