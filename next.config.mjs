@@ -42,6 +42,8 @@ const nextConfig = {
     optimizePackageImports: ["@xyflow/react", "@dnd-kit/core", "@dnd-kit/sortable", "material-symbols", "marked"],
   },
   webpack: (config, { isServer }) => {
+    // Only applies to `dev:webpack` and the `dev:webpack`-style opt-in; production
+    // builds run Turbopack (`next build`), which ignores this block entirely.
     // Ignore fs/path modules in browser bundle
     if (!isServer) {
       config.resolve.fallback = {

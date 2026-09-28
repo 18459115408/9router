@@ -71,6 +71,7 @@ git merge upstream/master
 | 你删掉的功能（combo、proxy-pools、capacity/vision、9Remote 推广、compact 等） | **一律保留删除**。整个文件被删就 `git rm`；上游只是小改就 `git checkout --ours <file>` 再人工核对 |
 | 上游新增的同类推广文件（新的 9Remote 菜单项、combo 新页面等） | 再次删掉，保持个人版干净 |
 | 无关的修复（provider 适配、流式处理、bug 修复） | 照常接受，这是同步的主要收益 |
+| 构建脚本（`package.json` 的 `build`/`build:bun`）：本仓库已去掉 `--webpack` 改用 Turbopack（2026-09-25），上游仍是 `--webpack` | **保留本地**。webpack 构建堆内存无收敛点，4/6/10/11GB 堆实测全部 OOM；Turbopack 峰值 ~2.7GB。`dev:webpack`（dev 逃生门）保留，不动 |
 
 ### 2.1 本仓库整体删除的目录（合并后必须再删）
 
