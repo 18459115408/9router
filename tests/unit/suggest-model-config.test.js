@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { suggestModelConfig, setSuggestCatalogSource } from "../../open-sse/providers/suggestModelConfig.js";
 import { setCustomCapsSource } from "../../open-sse/providers/capabilities.js";
-import { upsertModelConfig, deleteModelConfig } from "../../src/lib/db/repos/modelConfigRepo.js";
+import { upsertModelConfig, deleteModelConfig, refreshModelConfigs, __resetModelConfigForTest } from "../../src/lib/db/repos/modelConfigRepo.js";
+import { __resetFakeDb } from "../helpers/fakeDb.js";
+
+// In-memory store: rows the "does not leak" case writes are private to this
+// file instead of landing in the live ~/.9router database.
+vi.mock("@/lib/db/driver.js", () => import("../helpers/fakeDb.js"));
 
 // The gateway's own StepFun node, as the request path spells it.
 const SF = "openai-compatible-chat-0dcce5df-5d45-4c99-ae90-52ecefab4955";
@@ -12,6 +17,12 @@ describe("suggestModelConfig", () => {
     // alone, which is what an operator adding a brand-new model sees first.
     setCustomCapsSource(null);
     setSuggestCatalogSource(false);
+  });
+
+  beforeEach(async () => {
+    __resetFakeDb();
+    __resetModelConfigForTest();
+    await refreshModelConfigs();
   });
 
   it("proposes the built-in table values for a model the tables cover", () => {

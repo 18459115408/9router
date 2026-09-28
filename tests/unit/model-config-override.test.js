@@ -1,15 +1,21 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { getCapabilitiesForModel, setModelConfigSource, DEFAULT_CAPABILITIES } from "../../open-sse/providers/capabilities.js";
 import { getThinkingLevels } from "../../open-sse/providers/thinkingLevels.js";
-import { upsertModelConfig, deleteModelConfig, refreshModelConfigs, getStoredConfig } from "../../src/lib/db/repos/modelConfigRepo.js";
+import { upsertModelConfig, deleteModelConfig, refreshModelConfigs, getStoredConfig, __resetModelConfigForTest } from "../../src/lib/db/repos/modelConfigRepo.js";
 import { buildAliasIndex } from "../../open-sse/providers/customCapsOverride.js";
+import { __resetFakeDb } from "../helpers/fakeDb.js";
+
+// In-memory store: the rows under test are seeded below rather than read off
+// this machine's ~/.9router, so the file no longer depends on the manual
+// migration having been run here (and cannot leave rows behind if it dies).
+vi.mock("@/lib/db/driver.js", () => import("../helpers/fakeDb.js"));
 
 // The gateway's own StepFun node, carrying the config an operator already saved.
 const SF = "openai-compatible-chat-0dcce5df-5d45-4c99-ae90-52ecefab4955";
 const PROBE = "vitest-probe2";
 
-// Install a reader backed by the real store, the way instrumentation does.
-// Shared by every test in the file: installing per-describe meant one block's
+// Install a reader backed by the store, the way instrumentation does. Shared
+// by every test in the file: installing per-describe meant one block's
 // teardown could pull the reader out from under the next block.
 beforeAll(async () => {
   const { default: registry } = await import("../../open-sse/providers/registry/index.js");
@@ -18,17 +24,18 @@ beforeAll(async () => {
   setModelConfigSource({ getConfig: getStoredConfig });
 });
 
-afterAll(async () => {
-  const rows = [
-    { providerAlias: PROBE, id: "t-override" },
-    { providerAlias: PROBE, id: "t-turnoff" },
-    { providerAlias: PROBE, id: "t-builtin" },
-    { providerAlias: PROBE, id: "step-5-preview" },
-    { providerAlias: "openai", id: "gpt-4o" },
-    { providerAlias: "ds", id: "alias-probe-model" },
-    { providerAlias: PROBE, id: "gpt-4o" },
-  ];
-  for (const r of rows) await deleteModelConfig(r).catch(() => {});
+beforeEach(async () => {
+  __resetFakeDb();
+  __resetModelConfigForTest();
+  // The row the migration lifted for this node: {vision, reasoning} against a
+  // pattern table that says vision:false, so the overlay is load-bearing.
+  await upsertModelConfig({
+    providerAlias: SF, id: "step-5-preview", source: "operator",
+    caps: { vision: true, reasoning: true },
+  });
+});
+
+afterAll(() => {
   setModelConfigSource(null);
 });
 
@@ -62,7 +69,8 @@ describe("unified config overrides the built-in tables", () => {
     // maxOutput is not in the row, so the table value survives untouched.
     expect(c.maxOutput).toBe(64000);
     expect(getThinkingLevels(PROBE, "step-5-preview")).toEqual(["none", "low", "medium", "high"]);
-    await deleteModelConfig({ providerAlias: PROBE, id: "step-5-preview" });
+    // Null deletes the field, and the table's value comes back.
+    await upsertModelConfig({ providerAlias: PROBE, id: "step-5-preview", caps: { contextWindow: null } });
     expect(getCapabilitiesForModel(PROBE, "step-5-preview").contextWindow).toBe(128000);
   });
 

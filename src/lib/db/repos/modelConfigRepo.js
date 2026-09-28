@@ -14,6 +14,7 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { makeKv } from "../helpers/kvStore.js";
+import { getMeta, setMeta } from "../helpers/metaStore.js";
 import { sanitizeModelConfig, inferSource } from "../modelConfigSchema.js";
 
 const configKv = makeKv("modelConfigs");
@@ -115,6 +116,38 @@ export async function importLegacyCustomModel(row, { skipExisting = true } = {})
   return "imported";
 }
 
+// Lift every legacy `customModels` row into this store, once per database.
+//
+// An upgraded install has rows in the legacy scope that predate this store;
+// without the lift they stay invisible to the unified overlay and an operator
+// editing a pre-existing model would find their change doing nothing. The
+// marker is written only after the whole lift, so a crash mid-way retries on
+// the next boot; and importLegacyCustomModel skips rows that already exist, so
+// a row an operator has already edited here is never overwritten by its stale
+// legacy copy.
+//
+// `legacyRows` is passed in rather than read here: this repo must not depend on
+// the app's model layer (it is imported by engine-side code too).
+const LEGACY_LIFT_MARKER = "modelConfigsLegacyLifted";
+
+export async function liftLegacyRows(legacyRows) {
+  if (await getMeta(LEGACY_LIFT_MARKER)) return { imported: 0, skippedMarker: true };
+
+  let imported = 0;
+  for (const row of legacyRows || []) {
+    try {
+      const result = await importLegacyCustomModel(row);
+      if (result === "imported") imported += 1;
+    } catch {
+      // One malformed row must not abort the rest of the lift; the manual
+      // script's per-row report is the place to inspect these.
+    }
+  }
+  await setMeta(LEGACY_LIFT_MARKER, "1");
+  if (imported) await refreshModelConfigs();
+  return { imported, skippedMarker: false };
+}
+
 export async function deleteModelConfig({ providerAlias, id, type = "llm" }) {
   await configKv.remove(configKey(providerAlias, id, type));
   await refreshModelConfigs();
@@ -194,4 +227,7 @@ export function installModelConfigSource(setSource) {
 export function __resetModelConfigForTest() {
   if (typeof globalThis !== "undefined") delete globalThis[STATE_KEY];
   state._local = undefined;
+  // The TTL cache is module state too: clearing only the snapshot would let a
+  // test read rows its predecessor wrote for up to CACHE_TTL_MS.
+  cache = { value: null, expiresAt: 0 };
 }

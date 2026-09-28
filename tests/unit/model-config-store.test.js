@@ -1,41 +1,37 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   getModelConfigs, getStoredConfig, refreshModelConfigs,
-  upsertModelConfig, deleteModelConfig, importLegacyCustomModel,
+  upsertModelConfig, importLegacyCustomModel, liftLegacyRows, __resetModelConfigForTest,
 } from "../../src/lib/db/repos/modelConfigRepo.js";
 import { sanitizeModelConfig, isConfigLocked, inferSource } from "../../src/lib/db/modelConfigSchema.js";
+import { __resetFakeDb } from "../helpers/fakeDb.js";
 
-// Provider aliases as they appear in this machine's DB.
+// The store runs against an in-memory DB. Rows each test needs are seeded here
+// rather than read off this machine's ~/.9router, so the file passes on a fresh
+// install, in CI, and when vitest runs it in parallel with its siblings — the
+// shared live file used to make this suite both machine-dependent and flaky
+// (SQLITE_BUSY), and an interrupted run left permanent rows behind.
+vi.mock("@/lib/db/driver.js", () => import("../helpers/fakeDb.js"));
+
 const SF = "openai-compatible-chat-0dcce5df-5d45-4c99-ae90-52ecefab4955";
 const PROBE = "vitest-probe";
 
-// Rows these tests create and must clean up, so the suite is repeatable
-// against the real DB without leaving residue.
-const CLEANUP = [
-  { providerAlias: PROBE, id: "t-caps" },
-  { providerAlias: PROBE, id: "t-nulls" },
-  { providerAlias: PROBE, id: "t-locked" },
-  { providerAlias: PROBE, id: "t-legacy" },
-  { providerAlias: PROBE, id: "t-lift" },
-];
-
 describe("unified model-config store", () => {
-  beforeAll(async () => {
-    // Build our own snapshot rather than inheriting whatever a sibling test
-    // file left installed — the store is one real DB row set shared by every
-    // file in the run, so each must read it fresh.
+  beforeEach(async () => {
+    __resetFakeDb();
+    __resetModelConfigForTest();
     await refreshModelConfigs();
   });
 
-  afterAll(async () => {
-    for (const row of CLEANUP) await deleteModelConfig(row).catch(() => {});
-  });
+  it("holds one row per model, with the caps the operator set and their provenance", async () => {
+    // Seeded the way the migration lifts legacy rows: a caps patch becomes
+    // operator-owned, a registration with no caps becomes builtin.
+    await importLegacyCustomModel({ providerAlias: SF, id: "step-5-preview", type: "llm", caps: { vision: true, reasoning: true } });
+    await importLegacyCustomModel({ providerAlias: "ds", id: "deepseek-flash", type: "llm", caps: { vision: true, reasoning: true } });
+    await importLegacyCustomModel({ providerAlias: "cl", id: "deepseek/deepseek-v4.1-flash", type: "llm" });
 
-  it("holds one row per legacy custom model, with the caps the operator set", async () => {
     const all = await getModelConfigs();
-    expect(Object.keys(all).length).toBeGreaterThan(0);
-    // The two rows that carried caps before the migration still do, now with
-    // provenance attached.
+    expect(Object.keys(all).length).toBe(3);
     expect(getStoredConfig(SF, "step-5-preview")).toMatchObject({
       id: "step-5-preview", type: "llm", source: "operator",
       caps: { vision: true, reasoning: true },
@@ -45,7 +41,8 @@ describe("unified model-config store", () => {
     expect(getStoredConfig("cl", "deepseek/deepseek-v4.1-flash").source).toBe("builtin");
   });
 
-  it("resolves across vendor prefixes, case, and :suffixes", () => {
+  it("resolves across vendor prefixes, case, and :suffixes", async () => {
+    await upsertModelConfig({ providerAlias: "ds", id: "deepseek-flash", caps: { vision: true } });
     expect(getStoredConfig("ds", "vendor/deepseek-flash").id).toBe("deepseek-flash");
     expect(getStoredConfig("ds", "DEEPSEEK-FLASH").id).toBe("deepseek-flash");
     expect(getStoredConfig("ds", "deepseek-flash:free").id).toBe("deepseek-flash");
@@ -133,6 +130,30 @@ describe("unified model-config store", () => {
     expect(await importLegacyCustomModel({ ...legacy, caps: { vision: false } })).toBe("skipped-existing");
     expect(getStoredConfig(PROBE, "t-lift").caps.vision).toBe(true);
     expect(await importLegacyCustomModel({ providerAlias: PROBE })).toBe("skipped-invalid");
+  });
+
+  it("lifts every legacy row on the first boot, then stops", async () => {
+    const legacy = [
+      { providerAlias: PROBE, id: "t-lift-a", type: "llm", caps: { vision: true } },
+      { providerAlias: PROBE, id: "t-lift-b", type: "llm", caps: { reasoning: true } },
+    ];
+    expect(await liftLegacyRows(legacy)).toMatchObject({ imported: 2, skippedMarker: false });
+    expect(getStoredConfig(PROBE, "t-lift-a").caps).toEqual({ vision: true });
+
+    // The marker is set, so a later boot with more rows copies nothing: an
+    // operator who deletes a lifted row is not resurrected by the next boot.
+    expect(await liftLegacyRows([{ providerAlias: PROBE, id: "t-lift-c", type: "llm", caps: { vision: true } }]))
+      .toMatchObject({ imported: 0, skippedMarker: true });
+    expect(getStoredConfig(PROBE, "t-lift-c")).toBeNull();
+
+    // A fresh database where the row was already edited here: the lift must not
+    // drag the stale legacy copy back over the operator's correction.
+    __resetFakeDb();
+    __resetModelConfigForTest();
+    await refreshModelConfigs();
+    await upsertModelConfig({ providerAlias: PROBE, id: "t-lift-a", caps: { contextWindow: 999999 } });
+    await liftLegacyRows([{ providerAlias: PROBE, id: "t-lift-a", type: "llm", caps: { vision: true, contextWindow: 1 } }]);
+    expect(getStoredConfig(PROBE, "t-lift-a").caps).toEqual({ contextWindow: 999999 });
   });
 
   it("drops unknown, ill-typed and out-of-range fields instead of storing them", () => {
