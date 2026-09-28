@@ -3,8 +3,10 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
 import { Button, Toggle } from "@/shared/components";
+import { translate } from "@/i18n/runtime";
 import { CAPACITY_META } from "@/shared/constants/models";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
+import { mapProviderModelConfig } from "@/lib/db/providerModelMapping";
 import ThinkingConfigEditor from "./ThinkingConfigEditor";
 
 function CompatibleModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting, caps, onToggleCap, onUpdateCaps }) {
@@ -139,7 +141,7 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
     if (!newModel.trim() || adding) return;
     const modelId = newModel.trim();
     if (allModels.some((model) => model.id === modelId)) {
-      alert("Model already exists for this provider.");
+      alert(translate("Model already exists for this provider."));
       return;
     }
 
@@ -150,7 +152,7 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
       await onAddCustomModel(modelId);
       setNewModel("");
     } catch (error) {
-      console.log("Error adding model:", error);
+      alert(translate("Failed to add model") + (error?.message ? ": " + error.message : ""));
     } finally {
       setAdding(false);
     }
@@ -166,12 +168,12 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
       const res = await fetch(`/api/providers/${activeConnection.id}/models`);
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Failed to import models");
+        alert(data.error || translate("Failed to import models"));
         return;
       }
       const models = data.models || [];
       if (models.length === 0) {
-        alert("No models returned from /models.");
+        alert(translate("No models returned from /models."));
         return;
       }
       let importedCount = 0;
@@ -179,14 +181,17 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
         const modelId = model.id || model.name || model.model;
         if (!modelId) continue;
         if (allModels.some((entry) => entry.id === modelId)) continue;
-        await onAddCustomModel(modelId);
+        // Keep whatever config the provider published for this model instead of
+        // dropping it and guessing from the id afterwards.
+        const mapped = mapProviderModelConfig(model);
+        await onAddCustomModel(modelId, mapped?.caps || {});
         importedCount += 1;
       }
       if (importedCount === 0) {
-        alert("No new models were added.");
+        alert(translate("No new models were added."));
       }
     } catch (error) {
-      console.log("Error importing models:", error);
+      alert(translate("Failed to import models") + (error?.message ? ": " + error.message : ""));
     } finally {
       setImporting(false);
     }

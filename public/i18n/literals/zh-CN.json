@@ -1461,5 +1461,19 @@
   "Vision": "视觉",
   "Supports image input": "支持图片输入",
   "Supports reasoning / thinking": "支持推理 / 思考",
-  "Capabilities": "能力"
+  "Capabilities": "能力",
+  "Cached Cost": "缓存成本",
+  "No usage recorded yet.": "暂无用量记录",
+  "No account-specific usage recorded yet.": "暂无账号级用量记录",
+  "No API key usage recorded yet.": "暂无 API Key 用量记录",
+  "No endpoint usage recorded yet.": "暂无端点用量记录",
+  "Sorted by account remaining": "按账号剩余额度排序",
+  "Adding...": "添加中...",
+  "Model already exists for this provider.": "该提供商下已有此模型",
+  "Failed to add model": "添加模型失败",
+  "Failed to add custom model": "添加自定义模型失败",
+  "Failed to import models": "导入模型失败",
+  "No models returned from /models.": "/models 端点未返回任何模型",
+  "No new models were added.": "没有新增任何模型",
+  "Failed to unlock model config": "解锁模型配置失败"
 }

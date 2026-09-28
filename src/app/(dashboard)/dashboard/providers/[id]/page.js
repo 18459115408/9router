@@ -15,6 +15,7 @@ import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { translate } from "@/i18n/runtime";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
+import { mapProviderModelConfig } from "@/lib/db/providerModelMapping";
 import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
@@ -545,23 +546,33 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps) => {
+  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps, source) => {
     try {
       const res = await fetch("/api/models/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerAlias: providerAliasOverride, id: modelId, type, ...(caps ? { caps } : {}) }),
+        body: JSON.stringify({ providerAlias: providerAliasOverride, id: modelId, type, ...(caps ? { caps } : {}), ...(source ? { source } : {}) }),
       });
       if (res.ok) {
         await fetchCustomModels();
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("customModelChanged"));
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to add custom model");
+        alert(data.error || translate("Failed to add custom model"));
       }
     } catch (error) {
-      console.log("Error adding custom model:", error);
+      // Every caller of this writer (add, unlock, capability toggle) surfaces
+      // through here, so a network-level failure must not stay silent.
+      alert(translate("Failed to add custom model") + (error?.message ? ": " + error.message : ""));
     }
+  };
+
+  // A provider-sourced row is read-only while it mirrors what the upstream
+  // reports. Unlocking re-saves the same row as `operator`: the caps stay in the
+  // row (the store merges), only the provenance moves, so the operator can edit
+  // it like any row they added themselves.
+  const handleUnlockModelConfig = async (modelId) => {
+    await handleAddCustomModel(modelId, "llm", providerStorageAlias, {}, "operator");
   };
 
   const handleDeleteCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias) => {
@@ -621,7 +632,12 @@ export default function ProviderDetailPage() {
           continue;
         }
 
-        await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias);
+        // Qoder publishes per-model limits (contextLength, maxOutputTokens,
+        // isVL, isReasoning) — carry them into the row instead of discarding
+        // them and guessing from the id later. `provider` provenance makes the
+        // row read-only in the UI, since it mirrors what Qoder reports.
+        const mapped = mapProviderModelConfig(model);
+        await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias, mapped?.caps || {}, "provider");
         importedCount += 1;
       }
       
@@ -669,7 +685,10 @@ export default function ProviderDetailPage() {
         if (alreadyExists) {
           continue;
         }
-        await handleAddCustomModel(modelId, "llm", providerStorageAlias);
+        // Cline's /models carries per-model config; keep it rather than
+        // dropping it and re-deriving from the model name.
+        const mapped = mapProviderModelConfig(model);
+        await handleAddCustomModel(modelId, "llm", providerStorageAlias, mapped?.caps || {}, "provider");
         importedCount += 1;
       }
       if (importedCount === 0) {
@@ -1017,7 +1036,7 @@ export default function ProviderDetailPage() {
           onCopy={copy}
           onSetAlias={handleSetAlias}
           onDeleteAlias={handleDeleteAlias}
-          onAddCustomModel={(modelId, caps) => handleAddCustomModel(modelId, "llm", providerStorageAlias, caps)}
+          onAddCustomModel={(modelId, caps) => handleAddCustomModel(modelId, "llm", providerStorageAlias, caps, "provider")}
           onDeleteCustomModel={(modelId) => handleDeleteCustomModel(modelId, "llm", providerStorageAlias)}
           onToggleModelCap={(modelId, caps) => handleToggleModelCap(modelId, caps)}
           connections={connections}
@@ -1760,6 +1779,7 @@ export default function ProviderDetailPage() {
             await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps);
             setShowAddCustomModel(false);
           }}
+          onUnlock={handleUnlockModelConfig}
           onClose={() => setShowAddCustomModel(false)}
         />
       )}

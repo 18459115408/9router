@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getCustomModels, addCustomModel, deleteCustomModel } from "@/models";
 import { CAPACITY_META } from "@/shared/constants/models";
 import { refreshDeclaredCaps, THINKING_FORMATS, THINKING_LEVELS } from "open-sse/providers/customCapsOverride.js";
+import { refreshModelConfigSource } from "open-sse/providers/modelConfigOverride.js";
+import { upsertModelConfig, deleteModelConfig } from "@/lib/db/repos/modelConfigRepo.js";
+import { sanitizeModelConfig } from "@/lib/db/modelConfigSchema.js";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +46,28 @@ function sanitizeThinking(caps) {
   return Object.keys(clean).length ? clean : null;
 }
 
+// Fields the unified store accepts beyond the legacy caps subset, so an
+// operator can correct a context window or pin a target endpoint from the same
+// form. Handed to sanitizeModelConfig, which drops anything unknown or
+// ill-typed — the runtime's own sanitize is the backstop, this just avoids
+// persisting junk.
+const UNIFIED_FIELDS = [
+  "contextWindow", "maxOutput", "targetFormat", "upstreamModelId",
+  "supportedFormats", "strip", "quotaFamily", "quirks", "thinkingRange",
+  "thinkingEffortSupported", "pdf", "audioInput", "videoInput",
+  "imageOutput", "audioOutput", "search", "tools", "reasoning",
+  "vision", "thinkingFormat", "thinkingCanDisable", "thinkingLevels", "thinkingMapping",
+];
+
+function sanitizeUnified(caps) {
+  if (!caps || typeof caps !== "object") return null;
+  const clean = {};
+  for (const key of UNIFIED_FIELDS) {
+    if (caps[key] !== undefined) clean[key] = caps[key];
+  }
+  return Object.keys(clean).length ? clean : null;
+}
+
 // GET /api/models/custom - List all custom models
 export async function GET() {
   try {
@@ -54,10 +79,15 @@ export async function GET() {
   }
 }
 
-// POST /api/models/custom - Add custom model
+// POST /api/models/custom - Add or edit custom model
+//
+// Writes both stores: `customModels` (legacy, still read by the dashboard's
+// model list and the declared-caps path) and `modelConfigs` (the unified store
+// the request path resolves from first). The legacy write keeps every existing
+// reader working; the unified write is what makes the row authoritative.
 export async function POST(request) {
   try {
-    const { providerAlias, id, type, name, caps } = await request.json();
+    const { providerAlias, id, type, name, caps, source } = await request.json();
     if (!providerAlias || !id) {
       return NextResponse.json({ error: "providerAlias and id required" }, { status: 400 });
     }
@@ -66,9 +96,20 @@ export async function POST(request) {
       providerAlias, id, type: type || "llm", name,
       ...(Object.keys(cleanCaps).length ? { caps: cleanCaps } : {}),
     });
-    // Re-read the declarations so the change applies to the very next request
+
+    // A provider-supplied row is read-only until explicitly unlocked, so honour
+    // an explicit `source` here; otherwise an operator edit is the default.
+    const unified = sanitizeModelConfig({
+      providerAlias, id, type: type || "llm", name: name || id,
+      source: source === "provider" || source === "builtin" ? source : "operator",
+      caps: sanitizeUnified(caps),
+    });
+    if (unified) await upsertModelConfig(unified);
+
+    // Refresh both readers so the change applies to the very next request
     // instead of waiting for the next refresh tick.
     await refreshDeclaredCaps().catch(() => {});
+    await refreshModelConfigSource().catch(() => {});
     return NextResponse.json({ success: true, added });
   } catch (error) {
     console.log("Error adding custom model:", error);
@@ -77,6 +118,9 @@ export async function POST(request) {
 }
 
 // DELETE /api/models/custom?providerAlias=xxx&id=yyy&type=zzz
+//
+// Removes from both stores. Dropping the unified row is what actually restores
+// built-in behaviour, so it must not be skipped when the legacy row is absent.
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -87,7 +131,9 @@ export async function DELETE(request) {
       return NextResponse.json({ error: "providerAlias and id required" }, { status: 400 });
     }
     await deleteCustomModel({ providerAlias, id, type });
+    await deleteModelConfig({ providerAlias, id, type });
     await refreshDeclaredCaps().catch(() => {});
+    await refreshModelConfigSource().catch(() => {});
     return NextResponse.json({ success: true });
   } catch (error) {
     console.log("Error deleting custom model:", error);
