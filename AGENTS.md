@@ -48,6 +48,7 @@
 | 重复账户凭证检测 | providers / connections 相关 |
 | 自定义模型能力与思考档位、账户冷却状态展示与清除 | providers 相关页面 |
 | 用量明细显示 account/connection 名 | `src/app/(dashboard)/dashboard/usage/` 相关 |
+| 生产构建改用 Turbopack（2026-09-25） | `package.json` 的 `build`/`build:bun` 已去掉 `--webpack`：webpack 构建堆内存无收敛点（4/6/10/11GB 实测全 OOM），Turbopack 峰值 ~2.7GB。merge 上游时 build 脚本冲突 → 保留本地，见 `docs/UPSTREAM-SYNC.md` §2 |
 
 这些是**故意与上游分叉**的代码：与上游架构不一致 ≠ bug，上游没有文档 ≠ 过时。要动它们先读上表指向的文档。
 
