@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
 import { Button } from "@/shared/components";
+import { translate } from "@/i18n/runtime";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
 
 function PassthroughModelRow({ modelId, fullModel, copied, onCopy, onDeleteAlias, onTest, testStatus, isTesting }) {
@@ -103,7 +104,7 @@ export default function PassthroughModelsSection({ providerAlias, modelAliases, 
     const modelId = newModel.trim();
 
     if (allModels.some((model) => model.id === modelId)) {
-      alert("Model already exists for this provider.");
+      alert(translate("Model already exists for this provider."));
       return;
     }
 
@@ -112,7 +113,9 @@ export default function PassthroughModelsSection({ providerAlias, modelAliases, 
       await onAddCustomModel(modelId);
       setNewModel("");
     } catch (error) {
-      console.log("Error adding model:", error);
+      // The sibling sections surface this; a silent spinner here would make the
+      // operator retry into the same failure.
+      alert(translate("Failed to add model") + (error?.message ? ": " + error.message : ""));
     } finally {
       setAdding(false);
     }

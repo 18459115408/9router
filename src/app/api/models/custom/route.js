@@ -3,8 +3,8 @@ import { getCustomModels, addCustomModel, deleteCustomModel } from "@/models";
 import { CAPACITY_META } from "@/shared/constants/models";
 import { refreshDeclaredCaps, THINKING_FORMATS, THINKING_LEVELS } from "open-sse/providers/customCapsOverride.js";
 import { refreshModelConfigSource } from "open-sse/providers/modelConfigOverride.js";
-import { upsertModelConfig, deleteModelConfig } from "@/lib/db/repos/modelConfigRepo.js";
-import { sanitizeModelConfig } from "@/lib/db/modelConfigSchema.js";
+import { upsertModelConfig, deleteModelConfig, getModelConfigs } from "@/lib/db/repos/modelConfigRepo.js";
+import { sanitizeModelConfig, isConfigLocked, ALL_CAPABILITY_KEYS } from "@/lib/db/modelConfigSchema.js";
 
 export const dynamic = "force-dynamic";
 
@@ -46,33 +46,40 @@ function sanitizeThinking(caps) {
   return Object.keys(clean).length ? clean : null;
 }
 
-// Fields the unified store accepts beyond the legacy caps subset, so an
-// operator can correct a context window or pin a target endpoint from the same
-// form. Handed to sanitizeModelConfig, which drops anything unknown or
-// ill-typed — the runtime's own sanitize is the backstop, this just avoids
-// persisting junk.
-const UNIFIED_FIELDS = [
-  "contextWindow", "maxOutput", "targetFormat", "upstreamModelId",
-  "supportedFormats", "strip", "quotaFamily", "quirks", "thinkingRange",
-  "thinkingEffortSupported", "pdf", "audioInput", "videoInput",
-  "imageOutput", "audioOutput", "search", "tools", "reasoning",
-  "vision", "thinkingFormat", "thinkingCanDisable", "thinkingLevels", "thinkingMapping",
-];
-
+// The unified store accepts exactly the capability keys the schema defines.
+// Import that list rather than keeping a second copy here — a hand-maintained
+// duplicate is how the routing keys came to be accepted by this route and
+// dropped by the schema at the same time. Transport (target format, upstream
+// id, strip list, quota family, quirks) is not on the list: the row is the
+// capability answer, and the registry — where those values are actually read —
+// stays the routing source. sanitizeModelConfig drops anything unknown or
+// ill-typed on top of this, so junk never reaches the store either way.
 function sanitizeUnified(caps) {
   if (!caps || typeof caps !== "object") return null;
   const clean = {};
-  for (const key of UNIFIED_FIELDS) {
+  for (const key of ALL_CAPABILITY_KEYS) {
     if (caps[key] !== undefined) clean[key] = caps[key];
   }
   return Object.keys(clean).length ? clean : null;
 }
 
 // GET /api/models/custom - List all custom models
+//
+// Each row is annotated with its unified-store provenance (`source`, `locked`)
+// so a surface can tell a provider-supplied row — which mirrors the upstream
+// and is read-only until unlocked — from one the operator owns. Without this
+// the row list cannot know a row is locked and offers edits that the write
+// path then has to refuse.
 export async function GET() {
   try {
     const models = await getCustomModels();
-    return NextResponse.json({ models });
+    const configs = await getModelConfigs();
+    const byKey = new Map((configs || []).map((c) => [`${c.providerAlias}|${c.id}|${c.type || "llm"}`, c]));
+    const annotated = (models || []).map((model) => {
+      const stored = byKey.get(`${model.providerAlias}|${model.id}|${model.type || "llm"}`);
+      return stored ? { ...model, source: stored.source, locked: isConfigLocked(stored) } : model;
+    });
+    return NextResponse.json({ models: annotated });
   } catch (error) {
     console.log("Error fetching custom models:", error);
     return NextResponse.json({ error: "Failed to fetch custom models" }, { status: 500 });
@@ -91,6 +98,24 @@ export async function POST(request) {
     if (!providerAlias || !id) {
       return NextResponse.json({ error: "providerAlias and id required" }, { status: 400 });
     }
+
+    // A provider-supplied row is read-only until it is explicitly unlocked, so
+    // an edit must not be able to re-own it as a side effect. The row list used
+    // to post caps with no `source`, which made the default below silently flip
+    // every locked row to the operator's — and mutate caps the operator was
+    // never shown as locked. The check sits here, in the one writer both stores
+    // go through, so no surface can route around it: on a locked row, only
+    // re-publishing the provider's own config or an explicit unlock is allowed.
+    const rowType = type || "llm";
+    const existing = (await getModelConfigs({ fresh: true }) || [])
+      .find((c) => c.providerAlias === providerAlias && c.id === id && (c.type || "llm") === rowType);
+    if (isConfigLocked(existing) && source !== "provider" && source !== "operator") {
+      return NextResponse.json(
+        { error: "This row mirrors the provider's config — unlock it before editing" },
+        { status: 409 }
+      );
+    }
+
     const cleanCaps = { ...(sanitizeCaps(caps) || {}), ...(sanitizeThinking(caps) || {}) };
     const added = await addCustomModel({
       providerAlias, id, type: type || "llm", name,

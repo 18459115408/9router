@@ -29,6 +29,11 @@ export function getProviderCustomModelRows({
       fullModel,
       source: "custom",
       type: rowType,
+      // Provenance from the unified store, annotated by GET /api/models/custom.
+      // A locked row mirrors the provider and is read-only until unlocked, so a
+      // surface must not offer editors for it — and the write path refuses the
+      // edit anyway.
+      locked: !!model.locked,
     });
   }
 

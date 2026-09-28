@@ -6,6 +6,7 @@ import { Card, Button, Modal } from "@/shared/components";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getProviderAlias } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { translate } from "@/i18n/runtime";
 
 // ── ModelRow ───────────────────────────────────────────────────
 export function ModelRow({ model, fullModel, copied, onCopy, testStatus, isCustom, isFree, onDeleteAlias, onTest, isTesting }) {
@@ -159,14 +160,21 @@ export default function ModelsCard({ providerId, kindFilter, providerAliasOverri
       const res = await fetch("/api/models/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerAlias, id: modelId, type: effectiveType }),
-      });
-      if (res.ok) {
-        await fetchData();
-        window.dispatchEvent(new CustomEvent("customModelChanged"));
-      }
-    } catch (e) { console.log("add custom model error:", e); }
-  };
+      body: JSON.stringify({ providerAlias, id: modelId, type: effectiveType }),
+    });
+    if (res.ok) {
+      await fetchData();
+      window.dispatchEvent(new CustomEvent("customModelChanged"));
+    } else {
+      // Re-registering a provider-sourced row is refused with a 409 explaining
+      // why; swallowing it here would make the button look broken.
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || translate("Failed to add custom model"));
+    }
+  } catch (e) {
+    console.log("add custom model error:", e);
+  }
+};
 
   const handleDeleteCustomModel = async (modelId) => {
     try {
