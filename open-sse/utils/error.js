@@ -139,9 +139,17 @@ export function unavailableResponse(statusCode, message, retryAfter, retryAfterH
 export function formatProviderError(error, provider, model, statusCode) {
   const code = statusCode || error.code || "FETCH_FAILED";
   const message = error.message || "Unknown error";
-  // Expose low-level cause (e.g. UND_ERR_SOCKET, ECONNRESET, ETIMEDOUT) for diagnosing fetch failures
+  // Expose low-level cause (e.g. UND_ERR_SOCKET, ECONNREFUSED, ETIMEDOUT) for diagnosing fetch failures
   const causeCode = error.cause?.code;
   const causeMsg = error.cause?.message;
   const causeStr = causeCode || causeMsg ? ` (cause: ${[causeCode, causeMsg].filter(Boolean).join(": ")})` : "";
-  return `[${code}]: ${message}${causeStr}`;
+  // Which provider/model failed, in the spelling the request used. Every caller
+  // passes both; without them a single-account install whose upstream is down
+  // sees a bare "fetch failed" — and this string is what the client and the
+  // usage log keep, with "whose upstream is down" the first question either has
+  // to answer.
+  const where = [provider, model].filter(Boolean).join("/");
+  return where
+    ? `[${code}] ${where}: ${message}${causeStr}`
+    : `[${code}]: ${message}${causeStr}`;
 }
