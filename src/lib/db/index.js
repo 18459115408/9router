@@ -38,6 +38,14 @@ export {
   getPricing, getPricingForModel, updatePricing, resetPricing, resetAllPricing,
 } from "./repos/pricingRepo.js";
 
+// Unified model config (kv scope `modelConfigs`) — the single persisted place a
+// model's config lives. `customModels` above is legacy and left untouched.
+export {
+  getModelConfigs, upsertModelConfig, deleteModelConfig,
+  importLegacyCustomModel, resetModelConfigs,
+  invalidateModelConfigCache,
+} from "./repos/modelConfigRepo.js";
+
 // Disabled models
 export {
   getDisabledModels, getDisabledByProvider, disableModels, enableModels,
