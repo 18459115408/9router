@@ -87,13 +87,17 @@ export async function handleChat(request, clientRawRequest = null) {
   // too. The tunnel-gated bypass runs in chatCore after account selection.
   const userAgent = request?.headers?.get("user-agent") || "";
 
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, settings);
 }
 
 /**
  * Handle single model chat request
+ *
+ * `settings` is passed in from handleChat, which already read it for the
+ * requireApiKey check. A caller that has not read it gets a lazy read here —
+ * still once per request, not once per account fallback.
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, settings = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   if (!modelInfo.provider) {
@@ -107,6 +111,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
   // Extract userAgent from request
   const userAgent = request?.headers?.get("user-agent") || "";
+
+  // One settings read per request, reused by every account fallback attempt.
+  const chatSettings = settings || (await getSettings());
 
   // Try with available accounts (fallback on errors)
   const excludeConnectionIds = new Set();
@@ -145,10 +152,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     }
 
-    // Use shared chatCore. Settings were read once before the account loop
-    // (the requireApiKey check above); reading them again per attempt would
-    // repeat an identical DB read for every account fallback.
-    const providerThinking = (settings.providerThinking || {})[provider] || null;
+    // Use shared chatCore. chatSettings was read once above, outside the loop.
+    const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
       modelInfo: { provider, model },
