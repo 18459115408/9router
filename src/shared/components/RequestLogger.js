@@ -90,9 +90,9 @@ export default function RequestLogger() {
                   return (
                     <tr key={i} className={`hover:bg-primary/5 transition-colors ${isPending ? 'bg-primary/5' : ''}`}>
                       <td className="px-3 py-1.5 border-r border-border text-text-muted">{parts[0]}</td>
-                      <td className="px-3 py-1.5 border-r border-border font-medium">{parts[1]}</td>
-                      <td className="px-3 py-1.5 border-r border-border">
-                        <span className="px-1.5 py-0.5 rounded bg-bg-subtle border border-border text-[10px] uppercase font-bold">
+                      <td className="px-3 py-1.5 border-r border-border font-medium max-w-[240px] truncate" title={parts[1]}>{parts[1]}</td>
+                      <td className="px-3 py-1.5 border-r border-border max-w-[160px]">
+                        <span className="inline-block max-w-full truncate align-middle px-1.5 py-0.5 rounded bg-bg-subtle border border-border text-[10px] uppercase font-bold" title={parts[2]}>
                           {parts[2]}
                         </span>
                       </td>
